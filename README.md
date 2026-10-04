@@ -221,6 +221,6 @@ Discogs API is subject to the [API Terms of Use](https://support.discogs.com/hc/
 
 ## License
 
-Licensed under the [MIT License](https://opensource.org/licenses/MIT).
+Licensed under the [MIT License](https://opensource.org/licenses/MIT). See [LICENSE](./LICENSE) for details.
 
 Copyright (c) 2026-present hasteful

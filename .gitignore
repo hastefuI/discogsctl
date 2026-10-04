@@ -1,0 +1,6 @@
+# Build output (the binary shares its name with the module directory).
+/discogsctl
+
+# Go test and coverage artifacts.
+*.test
+*.out

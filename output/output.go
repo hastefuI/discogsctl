@@ -1,0 +1,380 @@
+// Package output renders Discogs values as text for a terminal or as JSON for
+// another program.
+//
+// JSON is the Discogs body itself, decoded and re-encoded, with no envelope:
+// a single resource prints as an object and a listing prints as the array of
+// its items. Text is an aligned table for a listing and a labelled block for a
+// single resource.
+package output
+
+import (
+	"cmp"
+	"encoding/json"
+	"fmt"
+	"io"
+	"slices"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+
+	"go.hasteful.org/discogsctl/api"
+)
+
+const (
+	// FormatText prints tables and labelled blocks meant for a terminal.
+	FormatText = "text"
+	// FormatJSON prints indented JSON meant to be piped into another tool.
+	FormatJSON = "json"
+)
+
+// ValidFormats returns the formats Write accepts.
+func ValidFormats() []string {
+	return []string{FormatText, FormatJSON}
+}
+
+// IsValidFormat reports whether format is one of ValidFormats.
+func IsValidFormat(format string) bool {
+	return slices.Contains(ValidFormats(), format)
+}
+
+// Write renders v to w in format. FormatText has a layout for each Discogs
+// type and falls back to JSON for anything else.
+func Write(w io.Writer, format string, v any) error {
+	switch format {
+	case FormatJSON:
+		return writeJSON(w, v)
+	case FormatText:
+		return writeText(w, v)
+	default:
+		return fmt.Errorf("unsupported output format %q", format)
+	}
+}
+
+func writeJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	return enc.Encode(v)
+}
+
+func writeText(w io.Writer, v any) error {
+	switch v := v.(type) {
+	case *api.Release:
+		return writeRelease(w, v)
+	case *api.ReleaseRating:
+		return writeBlock(w, []field{
+			{"Release", itoa(v.ReleaseID)},
+			{"Average", strconv.FormatFloat(v.Rating.Average, 'f', 2, 64)},
+			{"Votes", itoa(v.Rating.Count)},
+		})
+	case *api.Master:
+		return writeMaster(w, v)
+	case []api.MasterVersion:
+		return writeTable(w, "ID\tTITLE\tLABEL\tCATNO\tCOUNTRY\tYEAR\tFORMAT", v, func(m api.MasterVersion) []string {
+			return []string{itoa(m.ID), m.Title, m.Label, m.Catno, m.Country, m.Released, strings.Join(slices.Concat(m.MajorFormats, []string{m.Format}), ", ")}
+		})
+	case *api.Artist:
+		return writeArtist(w, v)
+	case []api.ArtistRelease:
+		return writeTable(w, "ID\tTYPE\tYEAR\tARTIST\tTITLE\tROLE", v, func(r api.ArtistRelease) []string {
+			return []string{itoa(r.ID), r.Type, year(r.Year), r.Artist, r.Title, r.Role}
+		})
+	case *api.Label:
+		return writeLabel(w, v)
+	case []api.LabelRelease:
+		return writeTable(w, "ID\tCATNO\tYEAR\tARTIST\tTITLE\tFORMAT", v, func(r api.LabelRelease) []string {
+			return []string{itoa(r.ID), r.Catno, year(r.Year), r.Artist, r.Title, r.Format}
+		})
+	case []api.SearchResult:
+		return writeTable(w, "ID\tTYPE\tYEAR\tTITLE\tCOUNTRY\tFORMAT\tCATNO", v, func(r api.SearchResult) []string {
+			return []string{itoa(r.ID), r.Type, r.Year, r.Title, r.Country, strings.Join(r.Format, ", "), r.Catno}
+		})
+	case *api.Identity:
+		return writeBlock(w, []field{
+			{"ID", itoa(v.ID)},
+			{"Username", v.Username},
+			{"Application", v.ConsumerName},
+			{"URL", v.ResourceURL},
+		})
+	case *api.User:
+		return writeUser(w, v)
+	case []api.Folder:
+		return writeTable(w, "ID\tNAME\tCOUNT", v, func(f api.Folder) []string {
+			return []string{itoa(f.ID), f.Name, itoa(f.Count)}
+		})
+	case []api.CollectionItem:
+		return writeTable(w, "ID\tARTIST\tTITLE\tYEAR\tFORMAT\tRATING\tADDED", v, func(i api.CollectionItem) []string {
+			b := i.BasicInformation
+			return []string{itoa(i.ID), artists(b.Artists), b.Title, year(b.Year), formats(b.Formats), rating(i.Rating), date(i.DateAdded)}
+		})
+	case *api.CollectionValue:
+		return writeBlock(w, []field{
+			{"Minimum", v.Minimum},
+			{"Median", v.Median},
+			{"Maximum", v.Maximum},
+		})
+	case []api.Want:
+		return writeTable(w, "ID\tARTIST\tTITLE\tYEAR\tFORMAT\tRATING\tADDED", v, func(want api.Want) []string {
+			b := want.BasicInformation
+			return []string{itoa(want.ID), artists(b.Artists), b.Title, year(b.Year), formats(b.Formats), rating(want.Rating), date(want.DateAdded)}
+		})
+	default:
+		return writeJSON(w, v)
+	}
+}
+
+func writeRelease(w io.Writer, r *api.Release) error {
+	fields := []field{
+		{"ID", itoa(r.ID)},
+		{"Title", r.Title},
+		{"Artists", artists(r.Artists)},
+		{"Released", cmp.Or(r.Released, year(r.Year))},
+		{"Country", r.Country},
+		{"Labels", labels(r.Labels)},
+		{"Formats", formats(r.Formats)},
+		{"Genres", strings.Join(r.Genres, ", ")},
+		{"Styles", strings.Join(r.Styles, ", ")},
+		{"Master", id(r.MasterID)},
+		{"Rating", votes(r.Community.Rating)},
+		{"Have", itoa(r.Community.Have)},
+		{"Want", itoa(r.Community.Want)},
+		{"For sale", forSale(r.NumForSale, r.LowestPrice)},
+		{"URL", r.URI},
+	}
+	if err := writeBlock(w, fields); err != nil {
+		return err
+	}
+	return writeTracklist(w, r.Tracklist)
+}
+
+func writeMaster(w io.Writer, m *api.Master) error {
+	fields := []field{
+		{"ID", itoa(m.ID)},
+		{"Title", m.Title},
+		{"Artists", artists(m.Artists)},
+		{"Year", year(m.Year)},
+		{"Main release", id(m.MainRelease)},
+		{"Genres", strings.Join(m.Genres, ", ")},
+		{"Styles", strings.Join(m.Styles, ", ")},
+		{"For sale", forSale(m.NumForSale, m.LowestPrice)},
+		{"URL", m.URI},
+	}
+	if err := writeBlock(w, fields); err != nil {
+		return err
+	}
+	return writeTracklist(w, m.Tracklist)
+}
+
+func writeArtist(w io.Writer, a *api.Artist) error {
+	return writeBlock(w, []field{
+		{"ID", itoa(a.ID)},
+		{"Name", a.Name},
+		{"Real name", a.RealName},
+		{"Members", refs(a.Members)},
+		{"Groups", refs(a.Groups)},
+		{"Variations", strings.Join(a.NameVariations, ", ")},
+		{"Links", strings.Join(a.URLs, " ")},
+		{"URL", a.URI},
+		{"Profile", oneLine(a.Profile)},
+	})
+}
+
+func writeLabel(w io.Writer, l *api.Label) error {
+	parent := ""
+	if l.ParentLabel != nil {
+		parent = l.ParentLabel.Name
+	}
+	sublabels := make([]string, len(l.Sublabels))
+	for i, s := range l.Sublabels {
+		sublabels[i] = s.Name
+	}
+	return writeBlock(w, []field{
+		{"ID", itoa(l.ID)},
+		{"Name", l.Name},
+		{"Parent", parent},
+		{"Sublabels", strings.Join(sublabels, ", ")},
+		{"Links", strings.Join(l.URLs, " ")},
+		{"URL", l.URI},
+		{"Profile", oneLine(l.Profile)},
+	})
+}
+
+func writeUser(w io.Writer, u *api.User) error {
+	return writeBlock(w, []field{
+		{"ID", itoa(u.ID)},
+		{"Username", u.Username},
+		{"Name", u.Name},
+		{"Email", u.Email},
+		{"Location", u.Location},
+		{"Registered", date(u.Registered)},
+		{"Collection", itoa(u.NumCollection)},
+		{"Wantlist", itoa(u.NumWantlist)},
+		{"For sale", itoa(u.NumForSale)},
+		{"Lists", itoa(u.NumLists)},
+		{"Currency", u.CurrAbbr},
+		{"URL", u.URI},
+	})
+}
+
+func writeTracklist(w io.Writer, tracks []api.Track) error {
+	if len(tracks) == 0 {
+		return nil
+	}
+	fmt.Fprintln(w, "\nTracklist:")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, t := range tracks {
+		if t.Type == "heading" {
+			fmt.Fprintf(tw, "  \t%s\t\n", cell(t.Title))
+			continue
+		}
+		fmt.Fprintf(tw, "  %s\t%s\t%s\n", t.Position, cell(t.Title), t.Duration)
+	}
+	return tw.Flush()
+}
+
+type field struct{ label, value string }
+
+// writeBlock prints one "Label: value" line per field, leaving out empty
+// values.
+func writeBlock(w io.Writer, fields []field) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
+	for _, f := range fields {
+		if f.value != "" {
+			fmt.Fprintf(tw, "%s:\t%s\n", f.label, f.value)
+		}
+	}
+	return tw.Flush()
+}
+
+func writeTable[T any](w io.Writer, header string, items []T, row func(T) []string) error {
+	if len(items) == 0 {
+		fmt.Fprintln(w, "No results.")
+		return nil
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, header)
+	for _, item := range items {
+		cells := row(item)
+		for i, c := range cells {
+			cells[i] = cell(c)
+		}
+		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+	}
+	return tw.Flush()
+}
+
+const maxCell = 40
+
+// cell flattens s to one line and truncates it to maxCell characters, so one
+// long title does not push every column off the screen.
+func cell(s string) string {
+	s = oneLine(s)
+	if r := []rune(s); len(r) > maxCell {
+		return string(r[:maxCell-1]) + "…"
+	}
+	return s
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// artists joins credits the way Discogs displays them, using the name
+// variation when there is one and the join text between names.
+func artists(credits []api.ArtistCredit) string {
+	var b strings.Builder
+	for i, a := range credits {
+		b.WriteString(cmp.Or(a.ANV, a.Name))
+		if i == len(credits)-1 {
+			break
+		}
+		switch j := strings.TrimSpace(a.Join); j {
+		case "", ",":
+			b.WriteString(", ")
+		default:
+			b.WriteString(" " + j + " ")
+		}
+	}
+	return b.String()
+}
+
+func labels(credits []api.LabelCredit) string {
+	parts := make([]string, len(credits))
+	for i, l := range credits {
+		parts[i] = l.Name
+		if l.Catno != "" {
+			parts[i] += " (" + l.Catno + ")"
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formats(fs []api.Format) string {
+	parts := make([]string, 0, len(fs))
+	for _, f := range fs {
+		desc := append([]string{f.Name}, f.Descriptions...)
+		if f.Text != "" {
+			desc = append(desc, f.Text)
+		}
+		if q, err := strconv.Atoi(f.Qty); err == nil && q > 1 {
+			desc[0] = f.Qty + "×" + f.Name
+		}
+		parts = append(parts, strings.Join(desc, ", "))
+	}
+	return strings.Join(parts, " + ")
+}
+
+func refs(rs []api.ArtistRef) string {
+	names := make([]string, len(rs))
+	for i, r := range rs {
+		names[i] = r.Name
+	}
+	return strings.Join(names, ", ")
+}
+
+func votes(r api.Rating) string {
+	if r.Count == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%.2f (%d votes)", r.Average, r.Count)
+}
+
+func forSale(n int, lowest *float64) string {
+	if n == 0 {
+		return ""
+	}
+	if lowest == nil {
+		return itoa(n)
+	}
+	return fmt.Sprintf("%d, from %.2f", n, *lowest)
+}
+
+func rating(r int) string {
+	if r == 0 {
+		return "-"
+	}
+	return itoa(r)
+}
+
+// date keeps the date part of a Discogs timestamp such as
+// 2017-06-22T15:25:55-07:00.
+func date(s string) string {
+	d, _, _ := strings.Cut(s, "T")
+	return d
+}
+
+func year(y int) string {
+	if y == 0 {
+		return ""
+	}
+	return itoa(y)
+}
+
+func id(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return itoa(n)
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }

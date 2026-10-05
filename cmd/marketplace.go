@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -41,6 +42,29 @@ or price.`,
 	})
 
 	cmd.AddCommand(newOrdersCmd(cfg))
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "order <order_id>",
+		Short: "Get one of your marketplace orders",
+		Long: `Get one of your marketplace orders as a seller, with its items, shipping, fee
+and tracking. This needs a token for the order's seller. Order IDs, such as
+1234567-89, are in the first column of marketplace orders.
+
+The text view leaves out the shipping address. --output json includes it,
+and it is the buyer's personal data.`,
+		Example: "  discogsctl marketplace order 1234567-89\n  discogsctl marketplace order 1234567-89 --output json | jq '.items[].release.description'",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(args[0]) == "" {
+				return errors.New("order ID is empty")
+			}
+			o, err := cfg.client.Order(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return cfg.print(cmd, o)
+		},
+	})
 	return cmd
 }
 
@@ -52,8 +76,9 @@ func newOrdersCmd(cfg *config) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "orders",
-		Short: "List your marketplace orders",
-		Long: `List the marketplace orders of the token holder. This needs a token.
+		Short: "List your marketplace orders as a seller",
+		Long: `List the marketplace orders of the token holder as a seller. This needs a
+token. Discogs has no listing of the orders you bought.
 
 --status takes one of: ` + strings.Join(api.OrderStatuses, ", ") + `.
 Case does not matter. --created-after and --created-before take a date, such

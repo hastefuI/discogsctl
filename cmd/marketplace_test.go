@@ -70,3 +70,13 @@ func TestMarketplaceOrdersFlagErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestMarketplaceOrderEmptyID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s", r.URL)
+	}))
+	defer srv.Close()
+	if _, _, err := run(t, srv, "marketplace", "order", " "); err == nil {
+		t.Error("an empty order ID succeeded, want error")
+	}
+}

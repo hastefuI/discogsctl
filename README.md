@@ -130,7 +130,8 @@ Available Commands:
   collection value        # Show the estimated value of a collection
   wantlist list           # List the releases in a wantlist
   marketplace stats <id>  # Get the copies for sale and lowest price of a release
-  marketplace orders      # List your marketplace orders
+  marketplace orders      # List your marketplace orders as a seller
+  marketplace order <id>  # Get one of your orders with its items and tracking
   whoami                  # Show the user the token belongs to
   user get <username>     # Get a user's profile
   dump list               # List the data dumps published at data.discogs.com
@@ -176,6 +177,9 @@ $ discogsctl marketplace orders --all --output json | jq 'group_by(.status) | ma
 
 # List the orders paid for but not yet shipped
 $ discogsctl marketplace orders --status "Payment Received"
+
+# Show your newest order with its items, shipping and tracking
+$ discogsctl marketplace order "$(discogsctl marketplace orders --sort-order desc --per-page 1 --output json | jq -r '.[0].id')"
 
 # Back up your wantlist using Docker
 $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output json > wantlist.json

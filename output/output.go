@@ -123,6 +123,8 @@ func writeText(w io.Writer, v any) error {
 		return writeTable(w, "ID\tCREATED\tSTATUS\tBUYER\tITEMS\tTOTAL", v, func(o api.Order) []string {
 			return []string{o.ID, date(o.Created), o.Status, o.Buyer.Username, itoa(len(o.Items)), price(o.Total)}
 		})
+	case *api.Order:
+		return writeOrder(w, v)
 	case *api.MarketplaceStats:
 		return writeMarketplaceStats(w, v)
 	case []dump.Fetched:
@@ -257,6 +259,49 @@ func private(n *int) string {
 		return "private"
 	}
 	return itoa(*n)
+}
+
+// writeOrder leaves out the shipping address, which is the buyer's personal
+// data, so the view can be shown or pasted without it.
+func writeOrder(w io.Writer, o *api.Order) error {
+	shipping := ""
+	if o.Shipping.Currency != "" {
+		shipping = price(api.Price{Value: o.Shipping.Value, Currency: o.Shipping.Currency})
+		if o.Shipping.Method != "" {
+			shipping += " (" + o.Shipping.Method + ")"
+		}
+	}
+	tracking := ""
+	if t := o.Tracking; t != nil {
+		tracking = strings.TrimSpace(t.Carrier + " " + t.Number)
+	}
+	if err := writeBlock(w, []field{
+		{"ID", o.ID},
+		{"Status", o.Status},
+		{"Created", date(o.Created)},
+		{"Last activity", date(o.LastActivity)},
+		{"Buyer", o.Buyer.Username},
+		{"Total", price(o.Total)},
+		{"Shipping", shipping},
+		{"Fee", price(o.Fee)},
+		{"Tracking", tracking},
+		{"Archived", yesNo(o.Archived)},
+		{"Next status", strings.Join(o.NextStatus, ", ")},
+		{"Instructions", oneLine(o.AdditionalInstructions)},
+		{"URL", o.URI},
+	}); err != nil {
+		return err
+	}
+	if len(o.Items) == 0 {
+		return nil
+	}
+	fmt.Fprintln(w, "\nItems:")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, it := range o.Items {
+		condition := strings.Join(slices.DeleteFunc([]string{it.MediaCondition, it.SleeveCondition}, func(s string) bool { return s == "" }), " / ")
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", id(it.Release.ID), cell(it.Release.Description), condition, price(it.Price))
+	}
+	return tw.Flush()
 }
 
 // writeMarketplaceStats leaves out the count and price Discogs sends as null.

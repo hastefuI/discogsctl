@@ -122,7 +122,8 @@ type UserRef struct {
 	ResourceURL string `json:"resource_url"`
 }
 
-// OrderItem is one listing in an order.
+// OrderItem is one listing in an order. The conditions are sent for a single
+// order, and may be empty in a listing of orders.
 type OrderItem struct {
 	ID      int `json:"id"`
 	Release struct {
@@ -130,7 +131,16 @@ type OrderItem struct {
 		Description string `json:"description"`
 		ResourceURL string `json:"resource_url"`
 	} `json:"release"`
-	Price Price `json:"price"`
+	Price           Price  `json:"price"`
+	MediaCondition  string `json:"media_condition"`
+	SleeveCondition string `json:"sleeve_condition"`
+}
+
+// Tracking is the shipment tracking on an order.
+type Tracking struct {
+	Number  string `json:"number"`
+	Carrier string `json:"carrier"`
+	URL     string `json:"url"`
 }
 
 // Shipping is the shipping charged on an order.
@@ -157,6 +167,7 @@ type Order struct {
 	Shipping               Shipping    `json:"shipping"`
 	ShippingAddress        string      `json:"shipping_address"`
 	AdditionalInstructions string      `json:"additional_instructions"`
+	Tracking               *Tracking   `json:"tracking"`
 	NextStatus             []string    `json:"next_status"`
 	URI                    string      `json:"uri"`
 	ResourceURL            string      `json:"resource_url"`
@@ -170,8 +181,23 @@ type order Order
 func (o *Order) UnmarshalJSON(b []byte) error { return decodeKeep(b, (*order)(o), &o.raw) }
 func (o Order) MarshalJSON() ([]byte, error)  { return encodeKept(o.raw, order(o)) }
 
-// Orders returns one page of the authenticated user's marketplace orders. It
-// needs a token; without one Discogs answers 401.
+// Order returns the marketplace order with id, such as "1-1". It needs a
+// token for the order's seller.
+func (c *Client) Order(ctx context.Context, id string) (*Order, error) {
+	u, err := c.endpoint("marketplace", "orders", strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	var o Order
+	if err := c.get(ctx, u, &o); err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+// Orders returns one page of the authenticated user's marketplace orders, the
+// ones they sold: Discogs has no listing of purchases. It needs a token;
+// without one Discogs answers 401.
 func (c *Client) Orders(ctx context.Context, q OrderQuery) (*Paginated[Order], error) {
 	u, err := c.endpoint("marketplace", "orders")
 	if err != nil {

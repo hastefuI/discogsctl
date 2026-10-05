@@ -120,3 +120,42 @@ func TestOrders(t *testing.T) {
 		t.Errorf("re-encoded order lost fields the type does not name: %s", b)
 	}
 }
+
+func TestOrder(t *testing.T) {
+	var uri string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uri = r.URL.EscapedPath()
+		w.Write([]byte(`{"id": "1-1", "status": "Shipped",
+			"items": [{"id": 41578242, "release": {"id": 1, "description": "Persuader, The - Stockholm (2x12\")"},
+			  "price": {"currency": "USD", "value": 42}, "media_condition": "Mint (M)", "sleeve_condition": "Very Good Plus (VG+)"}],
+			"tracking": {"number": "1Z999", "carrier": "UPS", "url": "https://www.ups.com/track?tracknum=1Z999"}}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, "test-token")
+
+	o, err := c.Order(t.Context(), "1-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/marketplace/orders/1-1" {
+		t.Errorf("path = %q, want /marketplace/orders/1-1", uri)
+	}
+	if len(o.Items) != 1 || o.Items[0].MediaCondition != "Mint (M)" || o.Items[0].SleeveCondition != "Very Good Plus (VG+)" {
+		t.Errorf("items = %+v", o.Items)
+	}
+	if o.Tracking == nil || *o.Tracking != (Tracking{"1Z999", "UPS", "https://www.ups.com/track?tracknum=1Z999"}) {
+		t.Errorf("tracking = %+v", o.Tracking)
+	}
+
+	if _, err := c.Order(t.Context(), "1-1/messages"); err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/marketplace/orders/1-1%2Fmessages" {
+		t.Errorf("path = %q, want the slash escaped so an ID cannot reach another route", uri)
+	}
+	for _, id := range []string{"", " ", ".."} {
+		if _, err := c.Order(t.Context(), id); err == nil {
+			t.Errorf("Order(%q) succeeded, want error", id)
+		}
+	}
+}

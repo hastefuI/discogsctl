@@ -146,3 +146,43 @@ func TestTextMarketplaceStats(t *testing.T) {
 		})
 	}
 }
+
+func TestTextOrder(t *testing.T) {
+	body := `{"id": "1-1", "status": "Shipped", "created": "2011-10-21T09:25:17-07:00", "last_activity": "2011-10-22T09:25:17-07:00",
+		"buyer": {"username": "example_buyer"}, "total": {"currency": "USD", "value": 42}, "fee": {"currency": "USD", "value": 2.52},
+		"shipping": {"currency": "USD", "method": "Standard", "value": 5}, "archived": false,
+		"tracking": {"number": "1Z999", "carrier": "UPS"}, "next_status": ["Shipped", "Refund Sent"],
+		"additional_instructions": "please use\nsturdy packaging.", "uri": "https://www.discogs.com/sell/order/1-1",
+		"shipping_address": "Asdf Exampleton\n234 NE Asdf St.",
+		"items": [{"release": {"id": 1, "description": "Persuader, The - Stockholm"}, "price": {"currency": "USD", "value": 42},
+		  "media_condition": "Mint (M)", "sleeve_condition": "Mint (M)"}]}`
+	var o api.Order
+	if err := json.Unmarshal([]byte(body), &o); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &o); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID:            1-1\n" +
+		"Status:        Shipped\n" +
+		"Created:       2011-10-21\n" +
+		"Last activity: 2011-10-22\n" +
+		"Buyer:         example_buyer\n" +
+		"Total:         42.00 USD\n" +
+		"Shipping:      5.00 USD (Standard)\n" +
+		"Fee:           2.52 USD\n" +
+		"Tracking:      UPS 1Z999\n" +
+		"Archived:      no\n" +
+		"Next status:   Shipped, Refund Sent\n" +
+		"Instructions:  please use sturdy packaging.\n" +
+		"URL:           https://www.discogs.com/sell/order/1-1\n" +
+		"\nItems:\n" +
+		"  1  Persuader, The - Stockholm  Mint (M) / Mint (M)  42.00 USD\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%s\nwant\n%s", buf.String(), want)
+	}
+	if strings.Contains(buf.String(), "Exampleton") {
+		t.Error("the text view printed the shipping address")
+	}
+}

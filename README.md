@@ -18,6 +18,7 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
   releases in your own
 - **Marketplace**: See how many copies of a release are for sale and the
   lowest price, in any supported currency, and list your orders as a seller
+- **Export**: Back up a collection and wantlist as one JSON file
 - **Data dumps**: List and download the monthly [data dumps](https://data.discogs.com),
   each file verified against its published SHA-256
 
@@ -138,6 +139,7 @@ Available Commands:
   marketplace order <id>     # Get one of your orders with its items and tracking
   marketplace messages <id>  # List the messages and history of one of your orders
   marketplace inventory      # List a seller's listings, your own by default
+  export                     # Export a collection and wantlist as JSON
   whoami                     # Show the user the token belongs to
   user get <username>        # Get a user's profile
   dump list                  # List the data dumps published at data.discogs.com
@@ -146,10 +148,6 @@ Available Commands:
 
 Use "discogsctl [command] --help" for more information about a command.
 ```
-
-The collection and wantlist commands take `--username`, which defaults to the
-token holder. `collection list` also takes `--folder`, which defaults to 0, the
-folder that holds every release.
 
 ## Examples
 
@@ -174,6 +172,9 @@ $ discogsctl collection list --all --output json | jq -r '.[].basic_information 
 
 # Back up your wantlist
 $ discogsctl wantlist list --all --output json > wantlist.json
+
+# Back up your collection and wantlist together
+$ discogsctl export > discogs-backup.json
 
 # Add a release to your wantlist with a note, then change the note
 $ discogsctl wantlist add 8191071 --notes "first press only"

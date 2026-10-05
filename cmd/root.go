@@ -118,6 +118,7 @@ is 3 for 401, 4 for 404, 5 for 429 and 1 for any other failure.`,
 		newWhoamiCmd(cfg),
 		newUserCmd(cfg),
 		newDumpCmd(cfg),
+		newExportCmd(cfg),
 		newVersionCmd(vi),
 	)
 	return root, cfg

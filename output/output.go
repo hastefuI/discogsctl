@@ -63,6 +63,11 @@ func writeText(w io.Writer, v any) error {
 	switch v := v.(type) {
 	case *api.Release:
 		return writeRelease(w, v)
+	case *api.CollectionInstance:
+		return writeBlock(w, []field{
+			{"Instance", itoa(v.InstanceID)},
+			{"URL", v.ResourceURL},
+		})
 	case *api.UserRating:
 		return writeBlock(w, []field{
 			{"Release", itoa(v.ReleaseID)},

@@ -25,6 +25,7 @@ func TestExitCode(t *testing.T) {
 		{&api.Error{StatusCode: 500}, ExitFailure},
 		{errors.New("boom"), ExitFailure},
 		{fmt.Errorf("dump: no dump with ID 2030: %w", dump.ErrNotFound), ExitNotFound},
+		{fmt.Errorf("release 1 is not in the collection: %w", ErrNotFound), ExitNotFound},
 	}
 	for _, tt := range tests {
 		if got := ExitCode(tt.err); got != tt.want {

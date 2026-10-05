@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -12,6 +13,10 @@ import (
 // Discogs serves it without authentication when the collection is public.
 // Every other folder needs authentication as the owner.
 const AllFolder = 0
+
+// UncategorizedFolder is the folder ID of "Uncategorized", where a release is
+// added unless another folder is chosen.
+const UncategorizedFolder = 1
 
 // Folder is a folder in a user's collection.
 type Folder struct {
@@ -138,4 +143,81 @@ func (c *Client) CollectionValue(ctx context.Context, username string) (*Collect
 		return nil, err
 	}
 	return &v, nil
+}
+
+// CollectionInstance is a copy of a release added to a collection.
+type CollectionInstance struct {
+	InstanceID  int    `json:"instance_id"`
+	ResourceURL string `json:"resource_url"`
+
+	raw json.RawMessage
+}
+
+type collectionInstance CollectionInstance
+
+func (i *CollectionInstance) UnmarshalJSON(b []byte) error {
+	return decodeKeep(b, (*collectionInstance)(i), &i.raw)
+}
+func (i CollectionInstance) MarshalJSON() ([]byte, error) {
+	return encodeKept(i.raw, collectionInstance(i))
+}
+
+// CollectionInstances returns every copy of the release with id in the
+// collection of username, each with its instance ID and folder. An empty
+// slice means the user has none. A private collection needs a token for its
+// owner.
+func (c *Client) CollectionInstances(ctx context.Context, username string, id int) ([]CollectionItem, error) {
+	if id < 1 {
+		return nil, fmt.Errorf("api: release id %d must be 1 or more", id)
+	}
+	u, err := c.endpoint("users", username, "collection", "releases", strconv.Itoa(id))
+	if err != nil {
+		return nil, err
+	}
+	page, err := getPage[CollectionItem](ctx, c, u, "releases")
+	if err != nil {
+		return nil, err
+	}
+	items := []CollectionItem{}
+	err = page.Each(ctx, func(item CollectionItem) error {
+		items = append(items, item)
+		return nil
+	})
+	return items, err
+}
+
+// AddToCollection adds a copy of the release with id to folder in the
+// collection of username, which must be the token holder, and returns its new
+// instance. folder must be 1 or more; 1 is "Uncategorized". Adding a release
+// the user already has adds another copy.
+func (c *Client) AddToCollection(ctx context.Context, username string, folder, id int) (*CollectionInstance, error) {
+	if folder < 1 {
+		return nil, fmt.Errorf("api: folder %d must be 1 or more; 0 holds every release and cannot be added to", folder)
+	}
+	if id < 1 {
+		return nil, fmt.Errorf("api: release id %d must be 1 or more", id)
+	}
+	u, err := c.endpoint("users", username, "collection", "folders", strconv.Itoa(folder), "releases", strconv.Itoa(id))
+	if err != nil {
+		return nil, err
+	}
+	var i CollectionInstance
+	if err := c.do(ctx, http.MethodPost, u, nil, &i); err != nil {
+		return nil, err
+	}
+	return &i, nil
+}
+
+// RemoveFromCollection removes one copy, instance, of the release with id from
+// folder in the collection of username, which must be the token holder.
+// CollectionInstances gives each copy's instance and folder.
+func (c *Client) RemoveFromCollection(ctx context.Context, username string, folder, id, instance int) error {
+	if folder < 1 || id < 1 || instance < 1 {
+		return fmt.Errorf("api: folder %d, release id %d and instance %d must each be 1 or more", folder, id, instance)
+	}
+	u, err := c.endpoint("users", username, "collection", "folders", strconv.Itoa(folder), "releases", strconv.Itoa(id), "instances", strconv.Itoa(instance))
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodDelete, u, nil, nil)
 }

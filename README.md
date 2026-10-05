@@ -12,8 +12,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
   versions and releases
 - **Search**: Query the database by artist, title, label, year, barcode,
   catalogue number and more
-- **Collection**: List folders and the releases in them, and see the estimated
-  value of your collection
+- **Collection**: List folders and the releases in them, see the estimated
+  value of your collection, and add and remove releases in your own
 - **Wantlist**: List the releases in a wantlist, and add, annotate and remove
   releases in your own
 - **Marketplace**: See how many copies of a release are for sale and the
@@ -132,6 +132,8 @@ Available Commands:
   collection folders         # List the folders in a collection
   collection list            # List the releases in a collection folder
   collection value           # Show the estimated value of a collection
+  collection add <id>        # Add a release to your collection
+  collection remove <id>     # Remove a release from your collection
   wantlist list              # List the releases in a wantlist
   wantlist add <id>          # Add a release to your wantlist
   wantlist edit <id>         # Change your notes on a release in your wantlist
@@ -165,6 +167,10 @@ $ discogsctl search --barcode "7 2064-24425-2 4" --type release
 
 # List the CD versions of a master with their country and catalogue number
 $ discogsctl master versions 1000 --all --output json | jq -r '.[] | select(.major_formats | index("CD")) | "\(.id) \(.country) \(.catno)"'
+
+# Add a release to your collection, then remove it
+$ discogsctl collection add 5077187
+$ discogsctl collection remove 5077187
 
 # Count the releases in your collection
 $ discogsctl collection list --all --output json | jq 'length'

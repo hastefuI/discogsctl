@@ -25,13 +25,18 @@ const (
 	ExitRateLimited  = 5
 )
 
-// ExitCode maps err to an exit code: 401 is 3, 404 or a data dump that does
+// ErrNotFound is wrapped by a command's error when what it was asked for does
+// not exist without Discogs answering 404, such as a release that is not in a
+// collection, so it exits 4 like a 404.
+var ErrNotFound = errors.New("not found")
+
+// ExitCode maps err to an exit code: 401 is 3, 404 or anything else that does
 // not exist is 4, 429 is 5, and any other failure is 1.
 func ExitCode(err error) int {
 	if err == nil {
 		return ExitOK
 	}
-	if errors.Is(err, dump.ErrNotFound) {
+	if errors.Is(err, ErrNotFound) || errors.Is(err, dump.ErrNotFound) {
 		return ExitNotFound
 	}
 	if apiErr, ok := errors.AsType[*api.Error](err); ok {

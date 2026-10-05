@@ -259,9 +259,13 @@ func TestTextPriceSuggestions(t *testing.T) {
 	}
 
 	var none api.PriceSuggestions
-	json.Unmarshal([]byte(`{}`), &none)
+	if err := json.Unmarshal([]byte(`{}`), &none); err != nil {
+		t.Fatal(err)
+	}
 	buf.Reset()
-	Write(&buf, FormatText, &none)
+	if err := Write(&buf, FormatText, &none); err != nil {
+		t.Fatal(err)
+	}
 	if buf.String() != "No results.\n" {
 		t.Errorf("no suggestions printed %q", buf.String())
 	}

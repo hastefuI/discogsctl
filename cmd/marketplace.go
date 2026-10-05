@@ -65,6 +65,27 @@ and it is the buyer's personal data.`,
 			return cfg.print(cmd, o)
 		},
 	})
+
+	messages := &cobra.Command{
+		Use:   "messages <order_id>",
+		Short: "List the messages and history of one of your orders",
+		Long: `List the history of one of your orders as a seller, most recent first:
+messages between you and the buyer, status changes and refunds. This needs
+a token for the order's seller.
+
+Messages are your conversation with the buyer, and can hold their personal
+details.`,
+		Example: "  discogsctl marketplace messages 1234567-89\n  discogsctl marketplace messages 1234567-89 --all --output json | jq -r '.[] | select(.type == \"message\") | .message'",
+		Args:    cobra.ExactArgs(1),
+	}
+	pages := cli.BindPageFlags(messages.Flags())
+	messages.RunE = listRun(cfg, pages, func(ctx context.Context, args []string, page api.Page) (*api.Paginated[api.OrderMessage], error) {
+		if strings.TrimSpace(args[0]) == "" {
+			return nil, errors.New("order ID is empty")
+		}
+		return cfg.client.OrderMessages(ctx, args[0], page)
+	})
+	cmd.AddCommand(messages)
 	return cmd
 }
 

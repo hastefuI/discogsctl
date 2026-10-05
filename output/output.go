@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"go.hasteful.org/discogsctl/api"
 	"go.hasteful.org/discogsctl/dump"
@@ -125,6 +126,8 @@ func writeText(w io.Writer, v any) error {
 		})
 	case *api.Order:
 		return writeOrder(w, v)
+	case []api.OrderMessage:
+		return writeOrderMessages(w, v)
 	case *api.MarketplaceStats:
 		return writeMarketplaceStats(w, v)
 	case []dump.Fetched:
@@ -302,6 +305,43 @@ func writeOrder(w io.Writer, o *api.Order) error {
 		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", id(it.Release.ID), cell(it.Release.Description), condition, price(it.Price))
 	}
 	return tw.Flush()
+}
+
+// writeOrderMessages prints each entry as a heading line of time, type and
+// who, then the full text indented below it. A table would cut messages off.
+func writeOrderMessages(w io.Writer, msgs []api.OrderMessage) error {
+	if len(msgs) == 0 {
+		fmt.Fprintln(w, "No results.")
+		return nil
+	}
+	for i, m := range msgs {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+		who := ""
+		switch {
+		case m.From != nil:
+			who = m.From.Username
+		case m.Actor != nil:
+			who = m.Actor.Username
+		}
+		fmt.Fprintln(w, strings.TrimSpace(strings.Join([]string{timestamp(m.Timestamp), m.Type, who}, "  ")))
+		for line := range strings.Lines(strings.TrimSpace(strings.ReplaceAll(m.Message, "\r\n", "\n"))) {
+			fmt.Fprintln(w, "  "+strings.TrimRight(line, "\n"))
+		}
+	}
+	return nil
+}
+
+// timestamp shortens a Discogs time such as 2015-06-02T13:17:54-07:00 to
+// 2015-06-02 13:17, in the offset Discogs sent, and leaves anything else as
+// it is.
+func timestamp(s string) string {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 // writeMarketplaceStats leaves out the count and price Discogs sends as null.

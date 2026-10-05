@@ -210,3 +210,54 @@ func (c *Client) Orders(ctx context.Context, q OrderQuery) (*Paginated[Order], e
 	u.RawQuery = v.Encode()
 	return getPage[Order](ctx, c, u, "orders")
 }
+
+// Refund is the refund an order message records.
+type Refund struct {
+	Amount float64 `json:"amount"`
+}
+
+// OrderMessage is one entry in an order's history. Type is "message" for a
+// message between buyer and seller, which has From; "status" for a status
+// change, which has Actor and StatusID; "refund_sent" or "refund_received",
+// which have Refund; or another type. Discogs also sends "payment" and
+// "tracking", which it does not document; both have Actor. Message is the
+// text, and for anything but a message it is Discogs' own description of the
+// event.
+type OrderMessage struct {
+	Type      string   `json:"type"`
+	Timestamp string   `json:"timestamp"`
+	Subject   string   `json:"subject"`
+	Message   string   `json:"message"`
+	From      *UserRef `json:"from"`
+	Actor     *UserRef `json:"actor"`
+	StatusID  int      `json:"status_id"`
+	Refund    *Refund  `json:"refund"`
+	Order     struct {
+		ID          string `json:"id"`
+		ResourceURL string `json:"resource_url"`
+	} `json:"order"`
+
+	raw json.RawMessage
+}
+
+type orderMessage OrderMessage
+
+func (m *OrderMessage) UnmarshalJSON(b []byte) error {
+	return decodeKeep(b, (*orderMessage)(m), &m.raw)
+}
+func (m OrderMessage) MarshalJSON() ([]byte, error) { return encodeKept(m.raw, orderMessage(m)) }
+
+// OrderMessages returns one page of the history of the order with id, most
+// recent first. It needs a token for the order's seller.
+func (c *Client) OrderMessages(ctx context.Context, id string, page Page) (*Paginated[OrderMessage], error) {
+	u, err := c.endpoint("marketplace", "orders", strings.TrimSpace(id), "messages")
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	if err := page.apply(q); err != nil {
+		return nil, err
+	}
+	u.RawQuery = q.Encode()
+	return getPage[OrderMessage](ctx, c, u, "messages")
+}

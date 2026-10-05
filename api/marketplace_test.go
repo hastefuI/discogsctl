@@ -159,3 +159,39 @@ func TestOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestOrderMessages(t *testing.T) {
+	var uri string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uri = r.URL.RequestURI()
+		w.Write([]byte(`{"pagination": {"page": 1, "pages": 1, "urls": {}}, "messages": [
+			{"type": "refund_sent", "timestamp": "2015-06-02T13:17:44-07:00", "message": "example_seller sent refund of $5.00.",
+			 "refund": {"amount": 5, "order": {"id": "845236-9"}}, "order": {"id": "845236-9"}},
+			{"type": "message", "timestamp": "2015-06-02T13:17:07-07:00", "message": "Thank you for your order!",
+			 "from": {"id": 1001, "username": "example_seller"}, "order": {"id": "845236-9"}},
+			{"type": "status", "status_id": 6, "timestamp": "2015-06-02T13:16:57-07:00",
+			 "actor": {"username": "example_seller"}, "message": "example_buyer changed the order status to Shipped."}]}`))
+	}))
+	defer srv.Close()
+
+	page, err := newTestClient(t, srv, "test-token").OrderMessages(t.Context(), "845236-9", Page{Page: 1, PerPage: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/marketplace/orders/845236-9/messages?page=1&per_page=100" {
+		t.Errorf("request = %q", uri)
+	}
+	if len(page.Items) != 3 {
+		t.Fatalf("messages = %+v, want 3", page.Items)
+	}
+	refund, msg, status := page.Items[0], page.Items[1], page.Items[2]
+	if refund.Refund == nil || refund.Refund.Amount != 5 || refund.Order.ID != "845236-9" {
+		t.Errorf("refund = %+v", refund)
+	}
+	if msg.From == nil || msg.From.Username != "example_seller" || msg.Actor != nil {
+		t.Errorf("message = %+v", msg)
+	}
+	if status.Actor == nil || status.StatusID != 6 || status.From != nil {
+		t.Errorf("status = %+v", status)
+	}
+}

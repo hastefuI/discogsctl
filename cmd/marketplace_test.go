@@ -80,3 +80,34 @@ func TestMarketplaceOrderEmptyID(t *testing.T) {
 		t.Error("an empty order ID succeeded, want error")
 	}
 }
+
+func TestMarketplaceMessages(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		if r.URL.Query().Get("page") == "1" {
+			fmt.Fprintf(w, `{"pagination": {"page": 1, "pages": 2, "urls": {"next": "http://%s/marketplace/orders/1-1/messages?page=2&per_page=100"}},
+				"messages": [{"type": "message", "message": "second"}]}`, r.Host)
+			return
+		}
+		fmt.Fprint(w, `{"pagination": {"page": 2, "pages": 2, "urls": {}}, "messages": [{"type": "message", "message": "first"}]}`)
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "marketplace", "messages", "1-1", "--all", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || seen[0] != "/marketplace/orders/1-1/messages?page=1&per_page=100" {
+		t.Errorf("requests = %q", seen)
+	}
+	if !strings.Contains(stdout, `"second"`) || !strings.Contains(stdout, `"first"`) {
+		t.Errorf("stdout = %s, want both pages", stdout)
+	}
+
+	seen = nil
+	if _, _, err := run(t, srv, "marketplace", "messages", " "); err == nil || len(seen) != 0 {
+		t.Errorf("empty order ID gave %v after %d requests, want an error and none", err, len(seen))
+	}
+}

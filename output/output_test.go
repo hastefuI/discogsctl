@@ -186,3 +186,32 @@ func TestTextOrder(t *testing.T) {
 		t.Error("the text view printed the shipping address")
 	}
 }
+
+func TestTextOrderMessages(t *testing.T) {
+	body := `[
+		{"type": "message", "timestamp": "2015-06-02T13:17:07-07:00", "from": {"username": "example_seller"},
+		 "message": "Thank you for your order!\r\nIt ships Monday.\r\n"},
+		{"type": "status", "timestamp": "2015-06-02T13:16:57-07:00", "actor": {"username": "example_seller"},
+		 "message": "example_buyer changed the order status to Shipped."},
+		{"type": "refund_sent", "timestamp": "not a time", "message": "example_seller sent refund of $5.00."}]`
+	var msgs []api.OrderMessage
+	if err := json.Unmarshal([]byte(body), &msgs); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, msgs); err != nil {
+		t.Fatal(err)
+	}
+	want := "2015-06-02 13:17  message  example_seller\n" +
+		"  Thank you for your order!\n" +
+		"  It ships Monday.\n" +
+		"\n" +
+		"2015-06-02 13:16  status  example_seller\n" +
+		"  example_buyer changed the order status to Shipped.\n" +
+		"\n" +
+		"not a time  refund_sent\n" +
+		"  example_seller sent refund of $5.00.\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

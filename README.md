@@ -116,27 +116,28 @@ Tracklist:
 discogsctl [command] [flags]
 
 Available Commands:
-  search [query]          # Search the Discogs database
-  release get <id>        # Get a release
-  release rating <id>     # Get the community rating of a release
-  master get <id>         # Get a master release
-  master versions <id>    # List the releases under a master
-  artist get <id>         # Get an artist
-  artist releases <id>    # List the releases and masters of an artist
-  label get <id>          # Get a label
-  label releases <id>     # List the releases on a label
-  collection folders      # List the folders in a collection
-  collection list         # List the releases in a collection folder
-  collection value        # Show the estimated value of a collection
-  wantlist list           # List the releases in a wantlist
-  marketplace stats <id>  # Get the copies for sale and lowest price of a release
-  marketplace orders      # List your marketplace orders as a seller
-  marketplace order <id>  # Get one of your orders with its items and tracking
-  whoami                  # Show the user the token belongs to
-  user get <username>     # Get a user's profile
-  dump list               # List the data dumps published at data.discogs.com
-  dump fetch [id]         # Download a data dump and verify its checksums
-  version                 # Print the version and User-Agent
+  search [query]             # Search the Discogs database
+  release get <id>           # Get a release
+  release rating <id>        # Get the community rating of a release
+  master get <id>            # Get a master release
+  master versions <id>       # List the releases under a master
+  artist get <id>            # Get an artist
+  artist releases <id>       # List the releases and masters of an artist
+  label get <id>             # Get a label
+  label releases <id>        # List the releases on a label
+  collection folders         # List the folders in a collection
+  collection list            # List the releases in a collection folder
+  collection value           # Show the estimated value of a collection
+  wantlist list              # List the releases in a wantlist
+  marketplace stats <id>     # Get the copies for sale and lowest price of a release
+  marketplace orders         # List your marketplace orders as a seller
+  marketplace order <id>     # Get one of your orders with its items and tracking
+  marketplace messages <id>  # List the messages and history of one of your orders
+  whoami                     # Show the user the token belongs to
+  user get <username>        # Get a user's profile
+  dump list                  # List the data dumps published at data.discogs.com
+  dump fetch [id]            # Download a data dump and verify its checksums
+  version                    # Print the version and User-Agent
 
 Use "discogsctl [command] --help" for more information about a command.
 ```
@@ -177,6 +178,9 @@ $ discogsctl marketplace orders --all --output json | jq 'group_by(.status) | ma
 
 # List the orders paid for but not yet shipped
 $ discogsctl marketplace orders --status "Payment Received"
+
+# Read the conversation on an order, without the status and payment entries
+$ discogsctl marketplace messages <order_id> --all --output json | jq -r '.[] | select(.type == "message") | "\(.timestamp) \(.from.username): \(.message)"'
 
 # Show your newest order with its items, shipping and tracking
 $ discogsctl marketplace order "$(discogsctl marketplace orders --sort-order desc --per-page 1 --output json | jq -r '.[0].id')"

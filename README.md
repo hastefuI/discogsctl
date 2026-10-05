@@ -33,6 +33,18 @@ $ go build -o discogsctl .
 $ go install .
 ```
 
+### Docker
+
+Build:
+```bash
+$ docker build -t discogsctl .
+```
+
+Run:
+```bash
+$ docker run --rm -e DISCOGSCTL_TOKEN discogsctl whoami
+```
+
 ### Verify Installation
 
 Verify that the installation for discogsctl was successful:
@@ -143,6 +155,9 @@ $ discogsctl collection list --all --output json | jq -r '.[].basic_information 
 
 # Back up your wantlist
 $ discogsctl wantlist list --all --output json > wantlist.json
+
+# Back up your wantlist using Docker
+$ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output json > wantlist.json
 
 # Read someone else's public collection
 $ discogsctl collection list --username <username> --all --output json

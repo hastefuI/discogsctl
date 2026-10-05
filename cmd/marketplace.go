@@ -41,6 +41,27 @@ or price.`,
 		},
 	})
 
+	cmd.AddCommand(&cobra.Command{
+		Use:   "price <release_id>",
+		Short: "Get suggested prices for a release by condition",
+		Long: `Get Discogs' suggested price for a release in each condition, from Mint to
+Poor. This needs a token for an account with its seller settings filled in.
+Prices are in your selling currency: Discogs ignores --currency here.`,
+		Example: "  discogsctl marketplace price 8191071\n  discogsctl marketplace price 8191071 --output json | jq '.\"Near Mint (NM or M-)\".value'",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := parseID("release", args[0])
+			if err != nil {
+				return err
+			}
+			p, err := cfg.client.PriceSuggestions(cmd.Context(), id)
+			if err != nil {
+				return err
+			}
+			return cfg.print(cmd, p)
+		},
+	})
+
 	cmd.AddCommand(newOrdersCmd(cfg))
 
 	cmd.AddCommand(&cobra.Command{

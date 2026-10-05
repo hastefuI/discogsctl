@@ -58,6 +58,44 @@ func (c *Client) MarketplaceStats(ctx context.Context, id int) (*MarketplaceStat
 	return &s, nil
 }
 
+// Conditions are the media grades Discogs uses, best first.
+var Conditions = []string{
+	"Mint (M)", "Near Mint (NM or M-)", "Very Good Plus (VG+)", "Very Good (VG)",
+	"Good Plus (G+)", "Good (G)", "Fair (F)", "Poor (P)",
+}
+
+// PriceSuggestions are Discogs' suggested prices for a release, keyed by
+// condition, such as "Mint (M)", in the seller's currency. Prices is empty
+// when Discogs has no suggestion.
+type PriceSuggestions struct {
+	Prices map[string]Price
+
+	raw json.RawMessage
+}
+
+func (p *PriceSuggestions) UnmarshalJSON(b []byte) error {
+	return decodeKeep(b, &p.Prices, &p.raw)
+}
+func (p PriceSuggestions) MarshalJSON() ([]byte, error) { return encodeKept(p.raw, p.Prices) }
+
+// PriceSuggestions returns suggested prices for the release with id. It needs
+// a token for a user who has filled in their seller settings. Prices are in
+// that user's selling currency: Discogs ignores a currency here.
+func (c *Client) PriceSuggestions(ctx context.Context, id int) (*PriceSuggestions, error) {
+	if id < 1 {
+		return nil, fmt.Errorf("api: release id %d must be 1 or more", id)
+	}
+	u, err := c.endpoint("marketplace", "price_suggestions", strconv.Itoa(id))
+	if err != nil {
+		return nil, err
+	}
+	var p PriceSuggestions
+	if err := c.get(ctx, u, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 // OrderStatuses are the values Discogs accepts for OrderQuery.Status.
 var OrderStatuses = []string{
 	"All", "New Order", "Buyer Contacted", "Invoice Sent", "Payment Pending",

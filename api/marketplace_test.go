@@ -229,3 +229,40 @@ func TestInventory(t *testing.T) {
 		}
 	}
 }
+
+func TestPriceSuggestions(t *testing.T) {
+	body := `{"Mint (M)":{"currency":"USD","value":546.25},"Poor (P)":{"currency":"USD","value":28.75}}`
+	var uri string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uri = r.URL.RequestURI()
+		if r.URL.Path == "/marketplace/price_suggestions/2" {
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Write([]byte(body))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, "test-token")
+
+	p, err := c.PriceSuggestions(t.Context(), 8191071)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/marketplace/price_suggestions/8191071" {
+		t.Errorf("request = %q", uri)
+	}
+	if len(p.Prices) != 2 || p.Prices["Mint (M)"] != (Price{546.25, "USD"}) {
+		t.Errorf("prices = %+v", p.Prices)
+	}
+	if out, _ := json.Marshal(p); string(out) != body {
+		t.Errorf("re-encoded = %s\nwant the body as sent: %s", out, body)
+	}
+
+	empty, err := c.PriceSuggestions(t.Context(), 2)
+	if err != nil || len(empty.Prices) != 0 {
+		t.Errorf("no suggestions = %+v, %v; want an empty map", empty, err)
+	}
+	if _, err := c.PriceSuggestions(t.Context(), 0); err == nil {
+		t.Error("PriceSuggestions(0) succeeded, want error")
+	}
+}

@@ -237,3 +237,32 @@ func TestTextInventory(t *testing.T) {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
+
+func TestTextPriceSuggestions(t *testing.T) {
+	body := `{"Poor (P)": {"currency": "USD", "value": 28.75}, "Mint (M)": {"currency": "USD", "value": 546.25},
+		"Very Good (VG)": {"currency": "USD", "value": 258.75}, "Shiny (S)": {"currency": "USD", "value": 1}}`
+	var p api.PriceSuggestions
+	if err := json.Unmarshal([]byte(body), &p); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &p); err != nil {
+		t.Fatal(err)
+	}
+	want := "CONDITION       PRICE\n" +
+		"Mint (M)        546.25 USD\n" +
+		"Very Good (VG)  258.75 USD\n" +
+		"Poor (P)        28.75 USD\n" +
+		"Shiny (S)       1.00 USD\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant best first, then unknown grades\n%q", buf.String(), want)
+	}
+
+	var none api.PriceSuggestions
+	json.Unmarshal([]byte(`{}`), &none)
+	buf.Reset()
+	Write(&buf, FormatText, &none)
+	if buf.String() != "No results.\n" {
+		t.Errorf("no suggestions printed %q", buf.String())
+	}
+}

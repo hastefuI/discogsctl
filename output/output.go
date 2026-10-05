@@ -155,6 +155,10 @@ func writeText(w io.Writer, v any) error {
 		return writeOrder(w, v)
 	case []api.OrderMessage:
 		return writeOrderMessages(w, v)
+	case *api.PriceSuggestions:
+		return writeTable(w, "CONDITION\tPRICE", byCondition(v.Prices), func(c string) []string {
+			return []string{c, price(v.Prices[c])}
+		})
 	case *api.MarketplaceStats:
 		return writeMarketplaceStats(w, v)
 	case []dump.Fetched:
@@ -584,6 +588,24 @@ func conditions(grades ...string) string {
 		}
 	}
 	return strings.Join(short, " / ")
+}
+
+// byCondition returns the conditions in prices, best first, followed by any
+// Discogs adds that api.Conditions does not know, sorted.
+func byCondition(prices map[string]api.Price) []string {
+	var known, other []string
+	for _, c := range api.Conditions {
+		if _, ok := prices[c]; ok {
+			known = append(known, c)
+		}
+	}
+	for c := range prices {
+		if !slices.Contains(api.Conditions, c) {
+			other = append(other, c)
+		}
+	}
+	slices.Sort(other)
+	return append(known, other...)
 }
 
 // price is an amount and its currency, such as 42.00 USD, and empty when

@@ -17,7 +17,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 - **Wantlist**: List the releases in a wantlist, and add, annotate and remove
   releases in your own
 - **Marketplace**: See how many copies of a release are for sale and the
-  lowest price, in any supported currency, and list your orders as a seller
+  lowest price in any supported currency, get suggested prices by condition,
+  and list a seller's inventory and your orders as a seller
 - **Export**: Back up a collection and wantlist as one JSON file
 - **Data dumps**: List and download the monthly [data dumps](https://data.discogs.com),
   each file verified against its published SHA-256
@@ -139,6 +140,7 @@ Available Commands:
   wantlist edit <id>         # Change your notes on a release in your wantlist
   wantlist remove <id>       # Remove a release from your wantlist
   marketplace stats <id>     # Get the copies for sale and lowest price of a release
+  marketplace price <id>     # Get suggested prices for a release by condition
   marketplace orders         # List your marketplace orders as a seller
   marketplace order <id>     # Get one of your orders with its items and tracking
   marketplace messages <id>  # List the messages and history of one of your orders
@@ -194,6 +196,9 @@ $ discogsctl wantlist edit 8191071 --notes "any pressing"
 
 # Get the lowest price of a release in pounds
 $ discogsctl marketplace stats 249504 --currency GBP --output json | jq '.lowest_price.value'
+
+# Get the suggested price of a release in Near Mint condition
+$ discogsctl marketplace price 8191071 --output json | jq '."Near Mint (NM or M-)".value'
 
 # Count your orders by status
 $ discogsctl marketplace orders --all --output json | jq 'group_by(.status) | map({(.[0].status): length}) | add'

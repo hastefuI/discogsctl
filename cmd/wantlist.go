@@ -45,8 +45,8 @@ func newWantAddCmd(cfg *config) *cobra.Command {
 		Long: `Add a release to your wantlist, with optional notes. This needs a token.
 
 Discogs ignores notes sent with an add, so --notes is set by a second
-request. A rating is not set here: Discogs keeps it on the release, not the
-wantlist.`,
+request. A rating is not set here: Discogs keeps it on the release, so use
+release rate.`,
 		Example: `  discogsctl wantlist add 8191071
   discogsctl wantlist add 8191071 --notes "first press only"`,
 		Args: cobra.ExactArgs(1),

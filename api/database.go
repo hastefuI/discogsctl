@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -289,6 +290,52 @@ func (c *Client) ReleaseRating(ctx context.Context, id int) (*ReleaseRating, err
 		return nil, err
 	}
 	return &r, nil
+}
+
+// UserRating is one user's rating of a release, 1 to 5.
+type UserRating struct {
+	ReleaseID int    `json:"release_id"`
+	Username  string `json:"username"`
+	Rating    int    `json:"rating"`
+
+	raw json.RawMessage
+}
+
+type userRating UserRating
+
+func (r *UserRating) UnmarshalJSON(b []byte) error { return decodeKeep(b, (*userRating)(r), &r.raw) }
+func (r UserRating) MarshalJSON() ([]byte, error)  { return encodeKept(r.raw, userRating(r)) }
+
+// RateRelease sets the rating username, which must be the token holder, gives
+// the release with id, from 1 to 5, and returns it. It is the rating the
+// user's wantlist shows for the release.
+//
+// The docs give no format for the rating. Tested live in October 2026,
+// Discogs accepted it only as a string in a JSON body, {"rating": "3"}, and
+// answered a JSON number, a query parameter or a form body with 422.
+func (c *Client) RateRelease(ctx context.Context, id int, username string, rating int) (*UserRating, error) {
+	if rating < 1 || rating > 5 {
+		return nil, fmt.Errorf("api: rating %d must be between 1 and 5", rating)
+	}
+	u, err := c.resource("releases", id, "rating", username)
+	if err != nil {
+		return nil, err
+	}
+	var r UserRating
+	if err := c.do(ctx, http.MethodPut, u, map[string]string{"rating": strconv.Itoa(rating)}, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// UnrateRelease removes the rating username, which must be the token holder,
+// gave the release with id. Removing a rating that is not there succeeds.
+func (c *Client) UnrateRelease(ctx context.Context, id int, username string) error {
+	u, err := c.resource("releases", id, "rating", username)
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodDelete, u, nil, nil)
 }
 
 // Master returns the master release with id.

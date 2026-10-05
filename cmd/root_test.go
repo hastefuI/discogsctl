@@ -166,3 +166,47 @@ func TestWantlistWrites(t *testing.T) {
 		t.Errorf("requests = %q, want none", seen)
 	}
 }
+
+func TestReleaseRateAndUnrate(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		switch {
+		case r.URL.Path == "/oauth/identity":
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			fmt.Fprint(w, `{"release_id": 8191071, "rating": 5, "username": "hasteful"}`)
+		}
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "release", "rate", "8191071", "--rating", "5")
+	if err != nil || !strings.Contains(stdout, "Rating:   5") {
+		t.Errorf("rate gave %q, %v", stdout, err)
+	}
+	stdout, stderr, err := run(t, srv, "release", "unrate", "8191071")
+	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed the rating of release 8191071") {
+		t.Errorf("unrate gave stdout %q, stderr %q, %v", stdout, stderr, err)
+	}
+	want := "GET /oauth/identity PUT /releases/8191071/rating/hasteful GET /oauth/identity DELETE /releases/8191071/rating/hasteful"
+	if got := strings.Join(seen, " "); got != want {
+		t.Errorf("requests = %q\nwant       %q", got, want)
+	}
+
+	seen = nil
+	for _, args := range [][]string{{"release", "rate", "8191071"}, {"release", "rate", "8191071", "--rating", "6"}, {"release", "rate", "8191071", "--rating", "0"}} {
+		if _, _, err := run(t, srv, args...); err == nil {
+			t.Errorf("%q succeeded, want error", args)
+		}
+	}
+	t.Setenv(envToken, "")
+	if _, _, err := run(t, srv, "release", "unrate", "8191071"); err == nil || !strings.Contains(err.Error(), "needs a token") {
+		t.Errorf("unrate without a token gave %v", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("requests = %q, want none", seen)
+	}
+}

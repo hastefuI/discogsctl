@@ -121,6 +121,8 @@ Available Commands:
   search [query]             # Search the Discogs database
   release get <id>           # Get a release
   release rating <id>        # Get the community rating of a release
+  release rate <id>          # Rate a release from 1 to 5
+  release unrate <id>        # Remove your rating of a release
   master get <id>            # Get a master release
   master versions <id>       # List the releases under a master
   artist get <id>            # Get an artist
@@ -175,6 +177,10 @@ $ discogsctl wantlist list --all --output json > wantlist.json
 
 # Back up your collection and wantlist together
 $ discogsctl export > discogs-backup.json
+
+# Rate a release, then remove the rating
+$ discogsctl release rate 8191071 --rating 5
+$ discogsctl release unrate 8191071
 
 # Add a release to your wantlist with a note, then change the note
 $ discogsctl wantlist add 8191071 --notes "first press only"

@@ -82,6 +82,12 @@ func writeText(w io.Writer, v any) error {
 		})
 	case *api.Master:
 		return writeMaster(w, v)
+	case []api.List:
+		return writeTable(w, "ID\tCHANGED\tPUBLIC\tNAME", v, func(l api.List) []string {
+			return []string{itoa(l.ID), date(l.DateChanged), yesNo(l.Public), l.Name}
+		})
+	case *api.List:
+		return writeList(w, v)
 	case []api.Release:
 		return writeTable(w, "ID\tADDED\tYEAR\tARTIST\tTITLE\tFORMAT", v, func(r api.Release) []string {
 			return []string{itoa(r.ID), date(r.DateAdded), year(r.Year), artists(r.Artists), r.Title, formats(r.Formats)}
@@ -299,6 +305,31 @@ func private(n *int) string {
 		return "private"
 	}
 	return itoa(*n)
+}
+
+func writeList(w io.Writer, l *api.List) error {
+	if err := writeBlock(w, []field{
+		{"ID", itoa(l.ID)},
+		{"Name", l.Name},
+		{"Owner", l.User.Username},
+		{"Public", yesNo(l.Public)},
+		{"Added", date(l.DateAdded)},
+		{"Changed", date(l.DateChanged)},
+		{"Items", itoa(len(l.Items))},
+		{"URL", l.URI},
+		{"Description", oneLine(l.Description)},
+	}); err != nil {
+		return err
+	}
+	if len(l.Items) == 0 {
+		return nil
+	}
+	fmt.Fprintln(w, "\nItems:")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, it := range l.Items {
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", it.Type, itoa(it.ID), cell(it.DisplayTitle), cell(it.Comment))
+	}
+	return tw.Flush()
 }
 
 // writeOrder leaves out the shipping address, which is the buyer's personal

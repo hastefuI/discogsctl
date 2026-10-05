@@ -284,3 +284,34 @@ func TestTextReleases(t *testing.T) {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
+
+func TestTextList(t *testing.T) {
+	body := `{"id": 100, "name": "Example List", "public": true, "date_added": "2009-06-23T03:02:05-07:00",
+		"date_changed": "2010-01-02T03:02:05-07:00", "user": {"username": "user"}, "uri": "https://www.discogs.com/lists/100",
+		"description": "Line one.\r\nLine two.",
+		"items": [{"id": 26694, "type": "release", "display_title": "Paolo Zerletti - Power", "comment": "opener"},
+		          {"id": 3227, "type": "artist", "display_title": "Silent Phase", "comment": ""}]}`
+	var l api.List
+	if err := json.Unmarshal([]byte(body), &l); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &l); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID:          100\n" +
+		"Name:        Example List\n" +
+		"Owner:       user\n" +
+		"Public:      yes\n" +
+		"Added:       2009-06-23\n" +
+		"Changed:     2010-01-02\n" +
+		"Items:       2\n" +
+		"URL:         https://www.discogs.com/lists/100\n" +
+		"Description: Line one. Line two.\n" +
+		"\nItems:\n" +
+		"  release  26694  Paolo Zerletti - Power  opener\n" +
+		"  artist   3227   Silent Phase            \n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

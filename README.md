@@ -150,6 +150,8 @@ Available Commands:
   user get <username>        # Get a user's profile
   user edit                  # Edit your profile
   user contributions         # List the releases a user has contributed
+  user lists                 # List a user's lists
+  list get <id>              # Get a list and its items
   dump list                  # List the data dumps published at data.discogs.com
   dump fetch [id]            # Download a data dump and verify its checksums
   dump verify <file>...      # Check dump files against their CHECKSUM file
@@ -226,6 +228,10 @@ $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output js
 
 # List the releases you have contributed, oldest first by year
 $ discogsctl user contributions --sort year --sort-order asc
+
+# List a user's lists, then show one with its items
+$ discogsctl user lists <username>
+$ discogsctl list get <list_id>
 
 # Edit your profile; an empty value clears a field
 $ discogsctl user edit --location "Anytown, USA" --profile "Collecting [b]Detroit techno[/b]"

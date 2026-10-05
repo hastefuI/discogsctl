@@ -288,3 +288,41 @@ func TestUserContributions(t *testing.T) {
 		t.Errorf("bad flags sent %q", seen)
 	}
 }
+
+func TestUserListsAndListGet(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		switch {
+		case r.URL.Path == "/oauth/identity":
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+		case strings.HasPrefix(r.URL.Path, "/lists/"):
+			fmt.Fprint(w, `{"id": 100, "name": "Example List", "items": []}`)
+		default:
+			fmt.Fprint(w, `{"pagination": {"page": 1, "pages": 1, "urls": {}}, "lists": [{"id": 94, "name": "Another List", "public": true}]}`)
+		}
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "user", "lists")
+	if err != nil || !strings.Contains(stdout, "Another List") {
+		t.Fatalf("user lists gave %q, %v", stdout, err)
+	}
+	if _, _, err := run(t, srv, "user", "lists", "user"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err = run(t, srv, "list", "get", "100")
+	if err != nil || !strings.Contains(stdout, "Example List") {
+		t.Fatalf("list get gave %q, %v", stdout, err)
+	}
+	want := []string{"/oauth/identity", "/users/hasteful/lists?page=1&per_page=50", "/users/user/lists?page=1&per_page=50", "/lists/100"}
+	if strings.Join(seen, " ") != strings.Join(want, " ") {
+		t.Errorf("requests = %q\nwant       %q", seen, want)
+	}
+
+	seen = nil
+	if _, _, err := run(t, srv, "list", "get", "abc"); err == nil || len(seen) != 0 {
+		t.Errorf("list get abc gave %v after %d requests, want an error and none", err, len(seen))
+	}
+}

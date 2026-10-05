@@ -33,6 +33,25 @@ func newUserCmd(cfg *config) *cobra.Command {
 
 	cmd.AddCommand(newUserEditCmd(cfg), newContributionsCmd(cfg))
 
+	lists := &cobra.Command{
+		Use:   "lists [username]",
+		Short: "List a user's lists",
+		Long: `List a user's lists, without their items; list get shows one with its items.
+Without a username, they are the token holder's, including private ones.
+Another user's private lists are left out.`,
+		Example: "  discogsctl user lists\n  discogsctl user lists <username> --all --output json | jq -r '.[] | \"\\(.id) \\(.name)\"'",
+		Args:    cobra.MaximumNArgs(1),
+	}
+	listPages := cli.BindPageFlags(lists.Flags())
+	lists.RunE = listRun(cfg, listPages, func(ctx context.Context, args []string, page api.Page) (*api.Paginated[api.List], error) {
+		user, err := cfg.username(ctx, strings.Join(args, ""))
+		if err != nil {
+			return nil, err
+		}
+		return cfg.client.UserLists(ctx, user, page)
+	})
+	cmd.AddCommand(lists)
+
 	return cmd
 }
 

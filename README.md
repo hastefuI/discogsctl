@@ -15,6 +15,7 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 - **Collection**: List folders and the releases in them, and see the estimated
   value of your collection
 - **Wantlist**: List the releases in a wantlist
+- **Data dumps**: List the monthly [data dumps](https://data.discogs.com)
 
 ## Installation
 
@@ -109,6 +110,7 @@ Available Commands:
   wantlist list           # List the releases in a wantlist
   whoami                  # Show the user the token belongs to
   user get <username>     # Get a user's profile
+  dump list               # List the data dumps published at data.discogs.com
   version                 # Print the version and User-Agent
 
 Use "discogsctl [command] --help" for more information about a command.
@@ -144,6 +146,12 @@ $ discogsctl wantlist list --all --output json > wantlist.json
 
 # Read someone else's public collection
 $ discogsctl collection list --username <username> --all --output json
+
+# List the latest data dumps
+$ discogsctl dump list
+
+# Print the download URL of the releases file in one dump
+$ discogsctl dump list --output json | jq -r '.[] | select(.id == "20261001") | .files[] | select(.type == "releases") | .url'
 ```
 
 ## Library

@@ -16,6 +16,7 @@ func run(t *testing.T, srv *httptest.Server, args ...string) (string, string, er
 	t.Helper()
 	root, cfg := newRootCmd(VersionInfo{Version: "test"})
 	cfg.baseURL = srv.URL
+	cfg.dumpURL = srv.URL
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

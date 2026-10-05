@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.hasteful.org/discogsctl/api"
+	"go.hasteful.org/discogsctl/dump"
 	"go.hasteful.org/discogsctl/internal/cli"
 	"go.hasteful.org/discogsctl/output"
 )
@@ -47,10 +48,13 @@ type config struct {
 	currency string
 	verbose  bool
 
-	// baseURL is the Discogs host. Tests point it at a fake server.
+	// baseURL is the Discogs host and dumpURL the data dump host. Tests point
+	// them at a fake server.
 	baseURL string
+	dumpURL string
 	agent   string
 	client  *api.Client
+	logger  *slog.Logger
 }
 
 // Execute runs the command line and returns the exit code.
@@ -72,7 +76,7 @@ func Execute(vi VersionInfo) int {
 }
 
 func newRootCmd(vi VersionInfo) (*cobra.Command, *config) {
-	cfg := &config{baseURL: api.DefaultBaseURL, agent: userAgent(vi.Version)}
+	cfg := &config{baseURL: api.DefaultBaseURL, dumpURL: dump.DefaultBaseURL, agent: userAgent(vi.Version)}
 
 	root := &cobra.Command{
 		Use:   "discogsctl",
@@ -112,6 +116,7 @@ is 3 for 401, 4 for 404, 5 for 429 and 1 for any other failure.`,
 		newWantlistCmd(cfg),
 		newWhoamiCmd(cfg),
 		newUserCmd(cfg),
+		newDumpCmd(cfg),
 		newVersionCmd(vi),
 	)
 	return root, cfg
@@ -128,6 +133,7 @@ func (cfg *config) connect(cmd *cobra.Command) error {
 	if cfg.verbose {
 		logger = slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
+	cfg.logger = logger
 
 	client, err := api.New(api.Options{
 		BaseURL:   cfg.baseURL,

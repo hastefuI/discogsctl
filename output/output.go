@@ -18,6 +18,7 @@ import (
 	"text/tabwriter"
 
 	"go.hasteful.org/discogsctl/api"
+	"go.hasteful.org/discogsctl/dump"
 )
 
 const (
@@ -117,6 +118,11 @@ func writeText(w io.Writer, v any) error {
 		return writeTable(w, "ID\tARTIST\tTITLE\tYEAR\tFORMAT\tRATING\tADDED", v, func(want api.Want) []string {
 			b := want.BasicInformation
 			return []string{itoa(want.ID), artists(b.Artists), b.Title, year(b.Year), formats(b.Formats), rating(want.Rating), date(want.DateAdded)}
+		})
+	case []dump.Dump:
+		return writeTable(w, "ID\tDATE\tTYPES\tCHECKSUM", v, func(d dump.Dump) []string {
+			_, ok := d.Checksum()
+			return []string{d.ID, d.Date, strings.Join(d.Types(), ","), yesNo(ok)}
 		})
 	default:
 		return writeJSON(w, v)
@@ -375,6 +381,13 @@ func id(n int) string {
 		return ""
 	}
 	return itoa(n)
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

@@ -12,11 +12,12 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
+
+	"go.hasteful.org/discogsctl/internal/useragent"
 )
 
 const (
@@ -97,8 +98,8 @@ func (tokenAuth) authenticated() bool { return true }
 // base URL is not https, the token is malformed, or Currency is not one of
 // Currencies.
 func New(opts Options) (*Client, error) {
-	if err := checkUserAgent(opts.UserAgent); err != nil {
-		return nil, err
+	if err := useragent.Check(opts.UserAgent); err != nil {
+		return nil, fmt.Errorf("api: %w", err)
 	}
 
 	base, err := url.Parse(cmp.Or(opts.BaseURL, DefaultBaseURL))
@@ -148,33 +149,6 @@ func New(opts Options) (*Client, error) {
 // Authenticated reports whether the client sends credentials.
 func (c *Client) Authenticated() bool {
 	return c.auth.authenticated()
-}
-
-var productVersion = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._+-]*$`)
-
-// genericAgents are products that name an HTTP library or a browser rather
-// than an application. Discogs lists curl and browser strings as bad agents.
-var genericAgents = []string{
-	"curl", "libcurl", "wget", "httpie",
-	"mozilla", "applewebkit", "chrome", "safari", "gecko", "firefox",
-	"go-http-client", "python-requests", "python-urllib", "okhttp", "java", "axios", "node-fetch", "postmanruntime",
-}
-
-func checkUserAgent(ua string) error {
-	fields := strings.Fields(ua)
-	if len(fields) == 0 {
-		return errors.New("api: UserAgent is required; Discogs identifies the calling application by it")
-	}
-	if !productVersion.MatchString(fields[0]) {
-		return fmt.Errorf("api: UserAgent %q must start with product/version, such as myapp/1.0", ua)
-	}
-	for _, f := range fields {
-		product, _, _ := strings.Cut(strings.ToLower(strings.Trim(f, "()+;,")), "/")
-		if slices.Contains(genericAgents, product) {
-			return fmt.Errorf("api: UserAgent %q names an HTTP library or browser, not the application", ua)
-		}
-	}
-	return nil
 }
 
 func isLoopback(host string) bool {

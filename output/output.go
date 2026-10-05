@@ -82,6 +82,8 @@ func writeText(w io.Writer, v any) error {
 		})
 	case *api.Master:
 		return writeMaster(w, v)
+	case *api.Submissions:
+		return writeSubmissions(w, v)
 	case []api.List:
 		return writeTable(w, "ID\tCHANGED\tPUBLIC\tNAME", v, func(l api.List) []string {
 			return []string{itoa(l.ID), date(l.DateChanged), yesNo(l.Public), l.Name}
@@ -305,6 +307,29 @@ func private(n *int) string {
 		return "private"
 	}
 	return itoa(*n)
+}
+
+// writeSubmissions prints one table of artists, labels and releases, each row
+// naming its kind.
+func writeSubmissions(w io.Writer, s *api.Submissions) error {
+	type row struct{ kind, id, name, quality string }
+	var rows []row
+	for _, a := range s.Artists {
+		rows = append(rows, row{"artist", itoa(a.ID), a.Name, a.DataQuality})
+	}
+	for _, l := range s.Labels {
+		rows = append(rows, row{"label", itoa(l.ID), l.Name, l.DataQuality})
+	}
+	for _, r := range s.Releases {
+		name := strings.TrimSpace(r.Title)
+		if a := artists(r.Artists); a != "" {
+			name = a + " - " + name
+		}
+		rows = append(rows, row{"release", itoa(r.ID), name, r.DataQuality})
+	}
+	return writeTable(w, "TYPE\tID\tNAME\tQUALITY", rows, func(r row) []string {
+		return []string{r.kind, r.id, r.name, r.quality}
+	})
 }
 
 func writeList(w io.Writer, l *api.List) error {

@@ -315,3 +315,24 @@ func TestTextList(t *testing.T) {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
+
+func TestTextSubmissions(t *testing.T) {
+	body := `{"artists": [{"id": 9, "name": "Westside Gunn", "data_quality": "Correct"}],
+		"labels": [{"id": 2939267, "name": "Popular Front", "data_quality": "Needs Vote"}],
+		"releases": [{"id": 24661865, "title": " FRONTWAVE ", "artists": [{"name": "Popular Front"}], "data_quality": "Needs Vote"}]}`
+	var s api.Submissions
+	if err := json.Unmarshal([]byte(body), &s); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &s); err != nil {
+		t.Fatal(err)
+	}
+	want := "TYPE     ID        NAME                       QUALITY\n" +
+		"artist   9         Westside Gunn              Correct\n" +
+		"label    2939267   Popular Front              Needs Vote\n" +
+		"release  24661865  Popular Front - FRONTWAVE  Needs Vote\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

@@ -150,6 +150,7 @@ Available Commands:
   user get <username>        # Get a user's profile
   user edit                  # Edit your profile
   user contributions         # List the releases a user has contributed
+  user submissions           # List the edits a user has submitted
   user lists                 # List a user's lists
   list get <id>              # Get a list and its items
   dump list                  # List the data dumps published at data.discogs.com
@@ -228,6 +229,9 @@ $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output js
 
 # List the releases you have contributed, oldest first by year
 $ discogsctl user contributions --sort year --sort-order asc
+
+# Count the releases you have submitted edits to
+$ discogsctl user submissions --all --output json | jq '.releases | length'
 
 # List a user's lists, then show one with its items
 $ discogsctl user lists <username>

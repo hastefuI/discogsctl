@@ -109,6 +109,9 @@ func (f *PageFlags) Page() (api.Page, error) {
 	return api.Page{Page: f.page, PerPage: perPage}, nil
 }
 
+// All reports whether --all was given.
+func (f *PageFlags) All() bool { return f.all }
+
 // Collect fetches the page the flags select, and with --all every page after
 // it, and returns their items in order.
 func Collect[T any](ctx context.Context, f *PageFlags, fetch func(context.Context, api.Page) (*api.Paginated[T], error)) ([]T, error) {

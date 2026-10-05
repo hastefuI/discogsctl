@@ -86,3 +86,36 @@ func TestContributions(t *testing.T) {
 		t.Errorf("bad queries sent %q", uri)
 	}
 }
+
+func TestSubmissions(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		if r.URL.Query().Get("page") == "2" {
+			w.Write([]byte(`{"pagination": {"page": 2, "pages": 2, "urls": {}}, "submissions": {"releases": [{"id": 3, "title": "C"}]}}`))
+			return
+		}
+		w.Write([]byte(`{"pagination": {"page": 1, "pages": 2, "urls": {"next": "http://` + r.Host + `/users/hasteful/submissions?per_page=2&page=2"}},
+			"submissions": {"artists": [], "labels": [{"id": 2, "name": "Popular Front", "data_quality": "Needs Vote"}], "releases": [{"id": 1, "title": "A"}]}}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, "")
+
+	first, err := c.Submissions(t.Context(), "hasteful", Page{PerPage: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Submissions.Labels) != 1 || len(first.Submissions.Releases) != 1 || first.Pagination.Pages != 2 {
+		t.Errorf("first page = %+v", first)
+	}
+	all, err := first.All(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Artists) != 0 || all.Artists == nil || len(all.Labels) != 1 || len(all.Releases) != 2 || all.Releases[1].ID != 3 {
+		t.Errorf("All = %+v, want 0 artists (not nil), 1 label, releases 1 and 3", all)
+	}
+	if want := "/users/hasteful/submissions?per_page=2 /users/hasteful/submissions?per_page=2&page=2"; strings.Join(seen, " ") != want {
+		t.Errorf("requests = %q", seen)
+	}
+}

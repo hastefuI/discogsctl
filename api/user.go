@@ -167,3 +167,87 @@ func (c *Client) Contributions(ctx context.Context, username string, q Contribut
 	u.RawQuery = v.Encode()
 	return getPage[Release](ctx, c, u, "contributions")
 }
+
+// Submissions are a user's edits to the database, by kind. Each entry is the
+// artist, label or release as Discogs sends it.
+type Submissions struct {
+	Artists  []Artist  `json:"artists"`
+	Labels   []Label   `json:"labels"`
+	Releases []Release `json:"releases"`
+}
+
+// SubmissionsPage is one page of a user's submissions. Discogs pages the three
+// kinds together, so a page of 50 holds 50 artists, labels and releases
+// combined, and Pagination counts them all.
+type SubmissionsPage struct {
+	Pagination  Pagination
+	Submissions Submissions
+
+	client *Client
+}
+
+// Submissions returns the first page of the edits username has made to
+// artists, labels and releases. They are public, so no token is needed.
+func (c *Client) Submissions(ctx context.Context, username string, page Page) (*SubmissionsPage, error) {
+	u, err := c.endpoint("users", username, "submissions")
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	if err := page.apply(q); err != nil {
+		return nil, err
+	}
+	u.RawQuery = q.Encode()
+	return c.submissionsPage(ctx, u)
+}
+
+// Next fetches the page after p, following pagination.urls.next. It returns
+// nil and no error when p is the last page.
+func (p *SubmissionsPage) Next(ctx context.Context) (*SubmissionsPage, error) {
+	if p.Pagination.URLs.Next == "" {
+		return nil, nil
+	}
+	u, err := p.client.follow(p.Pagination.URLs.Next)
+	if err != nil {
+		return nil, err
+	}
+	return p.client.submissionsPage(ctx, u)
+}
+
+// All returns the submissions on p and on every page after it, each kind
+// joined across pages.
+func (p *SubmissionsPage) All(ctx context.Context) (Submissions, error) {
+	all := Submissions{Artists: []Artist{}, Labels: []Label{}, Releases: []Release{}}
+	for page := p; page != nil; {
+		all.Artists = append(all.Artists, page.Submissions.Artists...)
+		all.Labels = append(all.Labels, page.Submissions.Labels...)
+		all.Releases = append(all.Releases, page.Submissions.Releases...)
+		next, err := page.Next(ctx)
+		if err != nil {
+			return all, err
+		}
+		page = next
+	}
+	return all, nil
+}
+
+func (c *Client) submissionsPage(ctx context.Context, u *url.URL) (*SubmissionsPage, error) {
+	var body struct {
+		Pagination  Pagination  `json:"pagination"`
+		Submissions Submissions `json:"submissions"`
+	}
+	if err := c.get(ctx, u, &body); err != nil {
+		return nil, err
+	}
+	s := body.Submissions
+	if s.Artists == nil {
+		s.Artists = []Artist{}
+	}
+	if s.Labels == nil {
+		s.Labels = []Label{}
+	}
+	if s.Releases == nil {
+		s.Releases = []Release{}
+	}
+	return &SubmissionsPage{Pagination: body.Pagination, Submissions: s, client: c}, nil
+}

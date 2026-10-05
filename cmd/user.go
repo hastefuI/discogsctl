@@ -52,6 +52,44 @@ Another user's private lists are left out.`,
 	})
 	cmd.AddCommand(lists)
 
+	submissions := &cobra.Command{
+		Use:   "submissions [username]",
+		Short: "List the edits a user has submitted",
+		Long: `List the edits a user has submitted to artists, labels and releases. Without
+a username, they are the token holder's. Submissions are public, so another
+user's need no token.
+
+Discogs pages the three kinds together, so --per-page counts them combined.
+--output json prints {"artists": [...], "labels": [...], "releases": [...]},
+with --all joining each kind across pages.`,
+		Example: "  discogsctl user submissions --all\n  discogsctl user submissions <username> --all --output json | jq '.releases | length'",
+		Args:    cobra.MaximumNArgs(1),
+	}
+	subPages := cli.BindPageFlags(submissions.Flags())
+	submissions.RunE = func(cmd *cobra.Command, args []string) error {
+		page, err := subPages.Page()
+		if err != nil {
+			return err
+		}
+		ctx := cmd.Context()
+		user, err := cfg.username(ctx, strings.Join(args, ""))
+		if err != nil {
+			return err
+		}
+		first, err := cfg.client.Submissions(ctx, user, page)
+		if err != nil {
+			return err
+		}
+		s := first.Submissions
+		if subPages.All() {
+			if s, err = first.All(ctx); err != nil {
+				return err
+			}
+		}
+		return cfg.print(cmd, &s)
+	}
+	cmd.AddCommand(submissions)
+
 	return cmd
 }
 

@@ -326,3 +326,34 @@ func TestUserListsAndListGet(t *testing.T) {
 		t.Errorf("list get abc gave %v after %d requests, want an error and none", err, len(seen))
 	}
 }
+
+func TestUserSubmissions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			fmt.Fprint(w, `{"pagination": {"page": 2, "pages": 2, "urls": {}}, "submissions": {"releases": [{"id": 3}]}}`)
+			return
+		}
+		fmt.Fprintf(w, `{"pagination": {"page": 1, "pages": 2, "urls": {"next": "http://%s/users/someone/submissions?page=2&per_page=100"}},
+			"submissions": {"labels": [{"id": 2}], "releases": [{"id": 1}]}}`, r.Host)
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "user", "submissions", "someone", "--all", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Artists  []struct{ ID int } `json:"artists"`
+		Labels   []struct{ ID int } `json:"labels"`
+		Releases []struct{ ID int } `json:"releases"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &s); err != nil {
+		t.Fatalf("stdout is not the submissions object: %v\n%s", err, stdout)
+	}
+	if s.Artists == nil || len(s.Labels) != 1 || len(s.Releases) != 2 {
+		t.Errorf("submissions = %+v; want artists [], one label and both pages of releases", s)
+	}
+	if !strings.Contains(stdout, `"artists": []`) {
+		t.Errorf("stdout has no empty artists array:\n%s", stdout)
+	}
+}

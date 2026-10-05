@@ -206,20 +206,49 @@ func writeLabel(w io.Writer, l *api.Label) error {
 }
 
 func writeUser(w io.Writer, u *api.User) error {
+	ratedAvg := ""
+	if u.ReleasesRated > 0 {
+		ratedAvg = strconv.FormatFloat(u.RatingAvg, 'f', 2, 64)
+	}
 	return writeBlock(w, []field{
 		{"ID", itoa(u.ID)},
 		{"Username", u.Username},
 		{"Name", u.Name},
 		{"Email", u.Email},
 		{"Location", u.Location},
+		{"Home page", u.HomePage},
 		{"Registered", date(u.Registered)},
-		{"Collection", itoa(u.NumCollection)},
-		{"Wantlist", itoa(u.NumWantlist)},
+		{"Rank", strconv.FormatFloat(u.Rank, 'f', -1, 64)},
+		{"Rating avg", ratedAvg},
+		{"Contributed", itoa(u.ReleasesContributed)},
+		{"Rated", itoa(u.ReleasesRated)},
+		{"Buyer", feedback(u.BuyerRating, u.BuyerNumRatings)},
+		{"Seller", feedback(u.SellerRating, u.SellerNumRatings)},
+		{"Collection", private(u.NumCollection)},
+		{"Wantlist", private(u.NumWantlist)},
 		{"For sale", itoa(u.NumForSale)},
 		{"Lists", itoa(u.NumLists)},
 		{"Currency", u.CurrAbbr},
 		{"URL", u.URI},
+		{"Profile", oneLine(u.Profile)},
 	})
+}
+
+// feedback is a marketplace rating as a percentage and the number of ratings
+// behind it, and empty when there are none.
+func feedback(percent float64, n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%.2f%% (%d ratings)", percent, n)
+}
+
+// private is a count Discogs leaves out when the list is private.
+func private(n *int) string {
+	if n == nil {
+		return "private"
+	}
+	return itoa(*n)
 }
 
 func writeTracklist(w io.Writer, tracks []api.Track) error {

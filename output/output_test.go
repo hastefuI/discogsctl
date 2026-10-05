@@ -71,3 +71,51 @@ func TestInvalidFormat(t *testing.T) {
 		t.Error("Write(yaml) succeeded, want error")
 	}
 }
+
+func TestTextUserPrivateCounts(t *testing.T) {
+	for _, tt := range []struct {
+		name, body, want string
+	}{
+		{"private", `{"id": 1, "username": "a", "num_for_sale": 0}`, "Collection:  private\nWantlist:    private\n"},
+		{"public and empty", `{"id": 1, "username": "a", "num_collection": 0, "num_wantlist": 3}`, "Collection:  0\nWantlist:    3\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var u api.User
+			if err := json.Unmarshal([]byte(tt.body), &u); err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			if err := Write(&buf, FormatText, &u); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(buf.String(), tt.want) {
+				t.Errorf("text output\n%s\nwant it to contain\n%s", buf.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestTextUserRatings(t *testing.T) {
+	body := `{"id": 2000001, "username": "user", "rank": 116.0, "rating_avg": 5.0,
+		"releases_contributed": 9, "releases_rated": 1, "buyer_rating": 100.0, "buyer_num_ratings": 25,
+		"seller_rating": 99.5, "seller_num_ratings": 160}`
+	var u api.User
+	if err := json.Unmarshal([]byte(body), &u); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &u); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Rank:        116\n",
+		"Rating avg:  5.00\n",
+		"Contributed: 9\n",
+		"Buyer:       100.00% (25 ratings)\n",
+		"Seller:      99.50% (160 ratings)\n",
+	} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("text output\n%s\nwant a line %q", buf.String(), want)
+		}
+	}
+}

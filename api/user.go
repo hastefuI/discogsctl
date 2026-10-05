@@ -21,26 +21,34 @@ func (i *Identity) UnmarshalJSON(b []byte) error { return decodeKeep(b, (*identi
 func (i Identity) MarshalJSON() ([]byte, error)  { return encodeKept(i.raw, identity(i)) }
 
 // User is a Discogs user profile. Email is set only when the client is
-// authenticated as that user. NumCollection and NumWantlist are zero when the
-// collection or wantlist is private and the client is not its owner.
+// authenticated as that user. NumCollection and NumWantlist are nil when the
+// collection or wantlist is private and the client is not its owner, because
+// Discogs leaves the count out rather than sending zero. RatingAvg is the
+// average of the ratings the user has given releases.
 type User struct {
-	ID            int     `json:"id"`
-	Username      string  `json:"username"`
-	Name          string  `json:"name"`
-	Email         string  `json:"email"`
-	Location      string  `json:"location"`
-	Profile       string  `json:"profile"`
-	HomePage      string  `json:"home_page"`
-	Registered    string  `json:"registered"`
-	NumCollection int     `json:"num_collection"`
-	NumWantlist   int     `json:"num_wantlist"`
-	NumForSale    int     `json:"num_for_sale"`
-	NumLists      int     `json:"num_lists"`
-	Rank          float64 `json:"rank"`
-	RatingAvg     float64 `json:"rating_avg"`
-	CurrAbbr      string  `json:"curr_abbr"`
-	URI           string  `json:"uri"`
-	ResourceURL   string  `json:"resource_url"`
+	ID                  int     `json:"id"`
+	Username            string  `json:"username"`
+	Name                string  `json:"name"`
+	Email               string  `json:"email"`
+	Location            string  `json:"location"`
+	Profile             string  `json:"profile"`
+	HomePage            string  `json:"home_page"`
+	Registered          string  `json:"registered"`
+	NumCollection       *int    `json:"num_collection"`
+	NumWantlist         *int    `json:"num_wantlist"`
+	NumForSale          int     `json:"num_for_sale"`
+	NumLists            int     `json:"num_lists"`
+	Rank                float64 `json:"rank"`
+	RatingAvg           float64 `json:"rating_avg"`
+	ReleasesContributed int     `json:"releases_contributed"`
+	ReleasesRated       int     `json:"releases_rated"`
+	BuyerRating         float64 `json:"buyer_rating"`
+	BuyerNumRatings     int     `json:"buyer_num_ratings"`
+	SellerRating        float64 `json:"seller_rating"`
+	SellerNumRatings    int     `json:"seller_num_ratings"`
+	CurrAbbr            string  `json:"curr_abbr"`
+	URI                 string  `json:"uri"`
+	ResourceURL         string  `json:"resource_url"`
 
 	raw json.RawMessage
 }

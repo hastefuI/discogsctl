@@ -261,3 +261,103 @@ func (c *Client) OrderMessages(ctx context.Context, id string, page Page) (*Pagi
 	u.RawQuery = q.Encode()
 	return getPage[OrderMessage](ctx, c, u, "messages")
 }
+
+// ListingStatuses are the values Discogs accepts for InventoryQuery.Status.
+// Anyone but the inventory's owner sees only "For Sale" listings, and Discogs
+// ignores the status filter for them rather than refusing it.
+var ListingStatuses = []string{"All", "For Sale", "Draft", "Expired", "Sold", "Deleted", "Suspended", "Violation"}
+
+// InventorySorts are the values Discogs accepts for InventoryQuery.Sort.
+// "item" is the release title. "status" and "location" need a token for the
+// inventory's owner.
+var InventorySorts = []string{"listed", "price", "item", "artist", "label", "catno", "audio", "status", "location"}
+
+// InventoryQuery filters a seller's inventory. Every field is optional, and an
+// empty field is left out of the request. SortOrder is "asc" or "desc".
+type InventoryQuery struct {
+	Status    string
+	Sort      string
+	SortOrder string
+
+	Page
+}
+
+func (q InventoryQuery) values() (url.Values, error) {
+	if q.Status != "" && !slices.Contains(ListingStatuses, q.Status) {
+		return nil, fmt.Errorf("api: listing status %q must be one of %s", q.Status, strings.Join(ListingStatuses, ", "))
+	}
+	if q.Sort != "" && !slices.Contains(InventorySorts, q.Sort) {
+		return nil, fmt.Errorf("api: inventory sort %q must be one of %s", q.Sort, strings.Join(InventorySorts, ", "))
+	}
+	if q.SortOrder != "" && q.SortOrder != "asc" && q.SortOrder != "desc" {
+		return nil, fmt.Errorf("api: sort order %q must be asc or desc", q.SortOrder)
+	}
+	v := url.Values{}
+	for name, value := range map[string]string{"status": q.Status, "sort": q.Sort, "sort_order": q.SortOrder} {
+		if value != "" {
+			v.Set(name, value)
+		}
+	}
+	if err := q.Page.apply(v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// ListingRelease is the release a listing sells, as a listing describes it.
+type ListingRelease struct {
+	ID            int    `json:"id"`
+	Description   string `json:"description"`
+	Artist        string `json:"artist"`
+	Title         string `json:"title"`
+	Format        string `json:"format"`
+	CatalogNumber string `json:"catalog_number"`
+	Year          int    `json:"year"`
+	ResourceURL   string `json:"resource_url"`
+}
+
+// Listing is one item in a seller's inventory. Price is in the seller's
+// currency. Location and ExternalID are sent only to the inventory's owner,
+// as are weight and quantity, which the JSON keeps but this type does not
+// name.
+type Listing struct {
+	ID              int            `json:"id"`
+	Status          string         `json:"status"`
+	Price           Price          `json:"price"`
+	AllowOffers     bool           `json:"allow_offers"`
+	Condition       string         `json:"condition"`
+	SleeveCondition string         `json:"sleeve_condition"`
+	Posted          string         `json:"posted"`
+	ShipsFrom       string         `json:"ships_from"`
+	Comments        string         `json:"comments"`
+	Audio           bool           `json:"audio"`
+	Seller          UserRef        `json:"seller"`
+	Release         ListingRelease `json:"release"`
+	Location        string         `json:"location"`
+	ExternalID      string         `json:"external_id"`
+	URI             string         `json:"uri"`
+	ResourceURL     string         `json:"resource_url"`
+
+	raw json.RawMessage
+}
+
+type listing Listing
+
+func (l *Listing) UnmarshalJSON(b []byte) error { return decodeKeep(b, (*listing)(l), &l.raw) }
+func (l Listing) MarshalJSON() ([]byte, error)  { return encodeKept(l.raw, listing(l)) }
+
+// Inventory returns one page of the listings in the inventory of username.
+// Without a token for its owner, only listings for sale are visible. Discogs
+// ignores a currency here, so prices are in the seller's own.
+func (c *Client) Inventory(ctx context.Context, username string, q InventoryQuery) (*Paginated[Listing], error) {
+	u, err := c.endpoint("users", username, "inventory")
+	if err != nil {
+		return nil, err
+	}
+	v, err := q.values()
+	if err != nil {
+		return nil, err
+	}
+	u.RawQuery = v.Encode()
+	return getPage[Listing](ctx, c, u, "listings")
+}

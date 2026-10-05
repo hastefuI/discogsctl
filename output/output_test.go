@@ -215,3 +215,25 @@ func TestTextOrderMessages(t *testing.T) {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
+
+func TestTextInventory(t *testing.T) {
+	body := `[{"id": 1, "status": "For Sale", "price": {"currency": "USD", "value": 8.5},
+		"condition": "Very Good (VG)", "sleeve_condition": "Very Good Plus (VG+)", "posted": "2025-03-21T16:46:25-07:00",
+		"release": {"description": "Vallanzaska - Cheope (CD, Album, RE)"}},
+		{"id": 2, "status": "Draft", "price": {"currency": "EUR", "value": 20}, "condition": "Mint (M)", "sleeve_condition": "",
+		"release": {"description": "Untitled"}}]`
+	var listings []api.Listing
+	if err := json.Unmarshal([]byte(body), &listings); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, listings); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID  STATUS    CONDITION  PRICE      POSTED      RELEASE\n" +
+		"1   For Sale  VG / VG+   8.50 USD   2025-03-21  Vallanzaska - Cheope (CD, Album, RE)\n" +
+		"2   Draft     M          20.00 EUR              Untitled\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

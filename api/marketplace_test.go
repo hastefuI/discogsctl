@@ -195,3 +195,37 @@ func TestOrderMessages(t *testing.T) {
 		t.Errorf("status = %+v", status)
 	}
 }
+
+func TestInventory(t *testing.T) {
+	var uri string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uri = r.URL.RequestURI()
+		w.Write([]byte(`{"pagination": {"page": 1, "pages": 1, "urls": {}}, "listings": [
+			{"id": 150899904, "status": "For Sale", "price": {"currency": "USD", "value": 149.99},
+			 "condition": "Near Mint (NM or M-)", "sleeve_condition": "Very Good Plus (VG+)", "posted": "2014-07-01T10:20:17-07:00",
+			 "seller": {"username": "rappcats"}, "original_price": {"curr_abbr": "USD", "value": 149.99},
+			 "release": {"id": 2992668, "description": "Danger Mouse & Daniele Luppi - Rome", "catalog_number": "TMR092", "year": 2011}}]}`))
+	}))
+	defer srv.Close()
+
+	page, err := newTestClient(t, srv, "").Inventory(t.Context(), "rappcats", InventoryQuery{Status: "For Sale", Sort: "price", SortOrder: "desc", Page: Page{PerPage: 100}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/users/rappcats/inventory?per_page=100&sort=price&sort_order=desc&status=For+Sale" {
+		t.Errorf("request = %q", uri)
+	}
+	l := page.Items[0]
+	if l.ID != 150899904 || l.Price != (Price{149.99, "USD"}) || l.Release.ID != 2992668 || l.Release.CatalogNumber != "TMR092" || l.Seller.Username != "rappcats" {
+		t.Errorf("listing = %+v", l)
+	}
+	if b, _ := json.Marshal(l); !bytes.Contains(b, []byte(`"original_price"`)) {
+		t.Errorf("re-encoded listing lost fields the type does not name: %s", b)
+	}
+
+	for _, bad := range []InventoryQuery{{Status: "for sale"}, {Sort: "condition"}, {SortOrder: "down"}} {
+		if _, err := bad.values(); err == nil {
+			t.Errorf("values(%+v) succeeded, want error", bad)
+		}
+	}
+}

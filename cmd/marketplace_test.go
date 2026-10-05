@@ -111,3 +111,42 @@ func TestMarketplaceMessages(t *testing.T) {
 		t.Errorf("empty order ID gave %v after %d requests, want an error and none", err, len(seen))
 	}
 }
+
+func TestMarketplaceInventory(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		if r.URL.Path == "/oauth/identity" {
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			return
+		}
+		fmt.Fprint(w, `{"pagination": {"page": 1, "pages": 1, "urls": {}}, "listings": []}`)
+	}))
+	defer srv.Close()
+
+	if _, _, err := run(t, srv, "marketplace", "inventory", "seller", "--status", "for sale", "--sort", "price"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := run(t, srv, "marketplace", "inventory", "--status", "DRAFT"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"/users/seller/inventory?page=1&per_page=50&sort=price&status=For+Sale",
+		"/oauth/identity",
+		"/users/hasteful/inventory?page=1&per_page=50&status=Draft",
+	}
+	if strings.Join(seen, " ") != strings.Join(want, " ") {
+		t.Errorf("requests = %q\nwant       %q", seen, want)
+	}
+
+	seen = nil
+	for _, args := range [][]string{{"--status", "listed"}, {"--sort", "condition"}, {"a", "b"}} {
+		if _, _, err := run(t, srv, append([]string{"marketplace", "inventory"}, args...)...); err == nil {
+			t.Errorf("%q succeeded, want error", args)
+		}
+	}
+	if len(seen) != 0 {
+		t.Errorf("bad flags sent %q, want no requests", seen)
+	}
+}

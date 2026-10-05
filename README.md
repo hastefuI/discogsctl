@@ -133,6 +133,7 @@ Available Commands:
   marketplace orders         # List your marketplace orders as a seller
   marketplace order <id>     # Get one of your orders with its items and tracking
   marketplace messages <id>  # List the messages and history of one of your orders
+  marketplace inventory      # List a seller's listings, your own by default
   whoami                     # Show the user the token belongs to
   user get <username>        # Get a user's profile
   dump list                  # List the data dumps published at data.discogs.com
@@ -181,6 +182,12 @@ $ discogsctl marketplace orders --status "Payment Received"
 
 # Read the conversation on an order, without the status and payment entries
 $ discogsctl marketplace messages <order_id> --all --output json | jq -r '.[] | select(.type == "message") | "\(.timestamp) \(.from.username): \(.message)"'
+
+# List a seller's most expensive listings
+$ discogsctl marketplace inventory <username> --sort price --sort-order desc
+
+# Count your own listings by status
+$ discogsctl marketplace inventory --all --output json | jq 'group_by(.status) | map({(.[0].status): length}) | add'
 
 # Show your newest order with its items, shipping and tracking
 $ discogsctl marketplace order "$(discogsctl marketplace orders --sort-order desc --per-page 1 --output json | jq -r '.[0].id')"

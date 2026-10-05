@@ -86,6 +86,58 @@ details.`,
 		return cfg.client.OrderMessages(ctx, args[0], page)
 	})
 	cmd.AddCommand(messages)
+	cmd.AddCommand(newInventoryCmd(cfg))
+	return cmd
+}
+
+func newInventoryCmd(cfg *config) *cobra.Command {
+	var (
+		q                       api.InventoryQuery
+		status, sort, sortOrder string
+	)
+	cmd := &cobra.Command{
+		Use:   "inventory [username]",
+		Short: "List a seller's inventory",
+		Long: `List the listings in a seller's inventory. Without a username, the inventory
+is the token holder's. Anyone but the owner sees only listings for sale, and
+Discogs ignores --status for them rather than refusing it. The owner can
+filter by --status and also sort by status or location.
+
+--status takes one of: ` + strings.Join(api.ListingStatuses, ", ") + `.
+Case does not matter. Prices are in the seller's currency: Discogs ignores
+--currency here.`,
+		Example: `  discogsctl marketplace inventory <username> --sort price --sort-order desc
+  discogsctl marketplace inventory <username> --all --output json | jq -r '.[] | "\(.price.value) \(.release.description)"'
+  discogsctl marketplace inventory --status draft`,
+		Args: cobra.MaximumNArgs(1),
+	}
+
+	f := cmd.Flags()
+	f.StringVar(&status, "status", "", `only listings with this status, such as "For Sale"`)
+	f.StringVar(&sort, "sort", "", "sort by: "+strings.Join(api.InventorySorts, ", "))
+	f.StringVar(&sortOrder, "sort-order", "", "asc or desc")
+	pages := cli.BindPageFlags(f)
+
+	cmd.RunE = listRun(cfg, pages, func(ctx context.Context, args []string, page api.Page) (*api.Paginated[api.Listing], error) {
+		// Every flag is checked before the username is resolved, which can
+		// cost a request.
+		var err error
+		if q.Status, err = oneOf("--status", status, api.ListingStatuses); err != nil {
+			return nil, err
+		}
+		if q.Sort, err = oneOf("--sort", sort, api.InventorySorts); err != nil {
+			return nil, err
+		}
+		if q.SortOrder, err = oneOf("--sort-order", sortOrder, []string{"asc", "desc"}); err != nil {
+			return nil, err
+		}
+		user, err := cfg.username(ctx, strings.Join(args, ""))
+		if err != nil {
+			return nil, err
+		}
+		q.Page = page
+		return cfg.client.Inventory(ctx, user, q)
+	})
 	return cmd
 }
 
@@ -123,7 +175,7 @@ they are buyers' personal data.`,
 
 	cmd.RunE = listRun(cfg, pages, func(ctx context.Context, args []string, page api.Page) (*api.Paginated[api.Order], error) {
 		var err error
-		if q.Status, err = orderStatus(status); err != nil {
+		if q.Status, err = oneOf("--status", status, api.OrderStatuses); err != nil {
 			return nil, err
 		}
 		if q.CreatedAfter, err = parseTime("--created-after", after); err != nil {
@@ -142,17 +194,18 @@ they are buyers' personal data.`,
 	return cmd
 }
 
-// orderStatus returns the status Discogs spells the same as s, ignoring case.
-func orderStatus(s string) (string, error) {
+// oneOf returns the value in options that matches s, ignoring case, so a
+// flag can take "payment received" for Discogs' "Payment Received".
+func oneOf(flag, s string, options []string) (string, error) {
 	if s == "" {
 		return "", nil
 	}
-	for _, status := range api.OrderStatuses {
-		if strings.EqualFold(status, strings.TrimSpace(s)) {
-			return status, nil
+	for _, o := range options {
+		if strings.EqualFold(o, strings.TrimSpace(s)) {
+			return o, nil
 		}
 	}
-	return "", fmt.Errorf("invalid --status %q, want one of %s", s, strings.Join(api.OrderStatuses, ", "))
+	return "", fmt.Errorf("invalid %s %q, want one of %s", flag, s, strings.Join(options, ", "))
 }
 
 // parseTime reads a date such as 2026-09-01, taken as midnight UTC, or an

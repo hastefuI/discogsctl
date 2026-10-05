@@ -124,6 +124,10 @@ func writeText(w io.Writer, v any) error {
 		return writeTable(w, "ID\tCREATED\tSTATUS\tBUYER\tITEMS\tTOTAL", v, func(o api.Order) []string {
 			return []string{o.ID, date(o.Created), o.Status, o.Buyer.Username, itoa(len(o.Items)), price(o.Total)}
 		})
+	case []api.Listing:
+		return writeTable(w, "ID\tSTATUS\tCONDITION\tPRICE\tPOSTED\tRELEASE", v, func(l api.Listing) []string {
+			return []string{itoa(l.ID), l.Status, conditions(l.Condition, l.SleeveCondition), price(l.Price), date(l.Posted), l.Release.Description}
+		})
 	case *api.Order:
 		return writeOrder(w, v)
 	case []api.OrderMessage:
@@ -542,6 +546,21 @@ func id(n int) string {
 		return ""
 	}
 	return itoa(n)
+}
+
+// conditions shortens media and sleeve grades such as "Very Good Plus (VG+)"
+// to the abbreviation in brackets, as "VG / VG+".
+func conditions(grades ...string) string {
+	var short []string
+	for _, g := range grades {
+		if open, end := strings.LastIndex(g, "("), strings.LastIndex(g, ")"); open >= 0 && end > open {
+			g = g[open+1 : end]
+		}
+		if g != "" {
+			short = append(short, g)
+		}
+	}
+	return strings.Join(short, " / ")
 }
 
 // price is an amount and its currency, such as 42.00 USD, and empty when

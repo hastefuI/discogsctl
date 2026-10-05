@@ -119,6 +119,10 @@ func writeText(w io.Writer, v any) error {
 			b := want.BasicInformation
 			return []string{itoa(want.ID), artists(b.Artists), b.Title, year(b.Year), formats(b.Formats), rating(want.Rating), date(want.DateAdded)}
 		})
+	case []api.Order:
+		return writeTable(w, "ID\tCREATED\tSTATUS\tBUYER\tITEMS\tTOTAL", v, func(o api.Order) []string {
+			return []string{o.ID, date(o.Created), o.Status, o.Buyer.Username, itoa(len(o.Items)), price(o.Total)}
+		})
 	case *api.MarketplaceStats:
 		return writeMarketplaceStats(w, v)
 	case []dump.Fetched:
@@ -266,7 +270,7 @@ func writeMarketplaceStats(w io.Writer, s *api.MarketplaceStats) error {
 		forSale = "0"
 	}
 	if s.LowestPrice != nil {
-		lowest = fmt.Sprintf("%.2f %s", s.LowestPrice.Value, s.LowestPrice.Currency)
+		lowest = price(*s.LowestPrice)
 	}
 	return writeBlock(w, []field{
 		{"For sale", forSale},
@@ -453,6 +457,15 @@ func id(n int) string {
 		return ""
 	}
 	return itoa(n)
+}
+
+// price is an amount and its currency, such as 42.00 USD, and empty when
+// Discogs sent none.
+func price(p api.Price) string {
+	if p.Currency == "" {
+		return ""
+	}
+	return fmt.Sprintf("%.2f %s", p.Value, p.Currency)
 }
 
 func yesNo(b bool) string {

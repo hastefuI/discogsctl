@@ -17,7 +17,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 - **Wantlist**: List the releases in a wantlist
 - **Marketplace**: See how many copies of a release are for sale and the
   lowest price, in any supported currency
-- **Data dumps**: List the monthly [data dumps](https://data.discogs.com)
+- **Data dumps**: List and download the monthly [data dumps](https://data.discogs.com),
+  each file verified against its published SHA-256
 
 ## Installation
 
@@ -45,6 +46,12 @@ $ docker build -t discogsctl .
 Run:
 ```bash
 $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl whoami
+```
+
+Download data dumps into a mounted directory, since the image has none it can
+write to:
+```bash
+$ docker run --rm -v "$PWD/dumps:/data" discogsctl dump fetch --latest --type labels --dir /data
 ```
 
 ### Verify Installation
@@ -126,6 +133,7 @@ Available Commands:
   whoami                  # Show the user the token belongs to
   user get <username>     # Get a user's profile
   dump list               # List the data dumps published at data.discogs.com
+  dump fetch [id]         # Download a data dump and verify its checksums
   version                 # Print the version and User-Agent
 
 Use "discogsctl [command] --help" for more information about a command.
@@ -170,6 +178,12 @@ $ discogsctl collection list --username <username> --all --output json
 
 # List the latest data dumps
 $ discogsctl dump list
+
+# Download the newest releases dump into ./dumps, verified against its checksum
+$ discogsctl dump fetch --latest --type releases --dir ./dumps
+
+# Download a dump by the start of its ID; after a failure, run it again to fetch only what is missing
+$ discogsctl dump fetch 202609 --type labels,masters
 
 # Print the download URL of the releases file in one dump
 $ discogsctl dump list --output json | jq -r '.[] | select(.id == "20261001") | .files[] | select(.type == "releases") | .url'

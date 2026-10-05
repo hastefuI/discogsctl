@@ -121,6 +121,8 @@ func writeText(w io.Writer, v any) error {
 		})
 	case *api.MarketplaceStats:
 		return writeMarketplaceStats(w, v)
+	case []dump.Fetched:
+		return writeFetched(w, v)
 	case []dump.Dump:
 		return writeTable(w, "ID\tDATE\tTYPES\tCHECKSUM", v, func(d dump.Dump) []string {
 			_, ok := d.Checksum()
@@ -271,6 +273,25 @@ func writeMarketplaceStats(w io.Writer, s *api.MarketplaceStats) error {
 		{"Lowest", lowest},
 		{"Blocked", yesNo(s.BlockedFromSale)},
 	})
+}
+
+// writeFetched is a table like writeTable, but never truncates the path,
+// which is there to be copied.
+func writeFetched(w io.Writer, files []dump.Fetched) error {
+	if len(files) == 0 {
+		fmt.Fprintln(w, "No results.")
+		return nil
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "TYPE\tSTATUS\tPATH")
+	for _, f := range files {
+		status := "downloaded"
+		if f.Skipped {
+			status = "already present"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", f.Type, status, f.Path)
+	}
+	return tw.Flush()
 }
 
 func writeTracklist(w io.Writer, tracks []api.Track) error {

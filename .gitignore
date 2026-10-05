@@ -4,3 +4,7 @@
 # Go test and coverage artifacts.
 *.test
 *.out
+
+# Data dumps and partial downloads from dump fetch.
+*.gz
+*.part

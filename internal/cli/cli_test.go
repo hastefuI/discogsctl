@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"go.hasteful.org/discogsctl/api"
+	"go.hasteful.org/discogsctl/dump"
 )
 
 func TestExitCode(t *testing.T) {
@@ -23,6 +24,7 @@ func TestExitCode(t *testing.T) {
 		{&api.Error{StatusCode: 403}, ExitFailure},
 		{&api.Error{StatusCode: 500}, ExitFailure},
 		{errors.New("boom"), ExitFailure},
+		{fmt.Errorf("dump: no dump with ID 2030: %w", dump.ErrNotFound), ExitNotFound},
 	}
 	for _, tt := range tests {
 		if got := ExitCode(tt.err); got != tt.want {

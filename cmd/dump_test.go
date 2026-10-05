@@ -1,12 +1,19 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"go.hasteful.org/discogsctl/internal/cli"
 )
 
 // dumpHost serves a listing with the years in pages, keyed by year, and
@@ -164,5 +171,117 @@ func TestDumpListType(t *testing.T) {
 
 	if _, _, err := run(t, srv, "dump", "list", "--year", "2025", "--type", "release"); err == nil || !strings.Contains(err.Error(), "invalid --type") {
 		t.Errorf("--type release error = %v, want an invalid --type error", err)
+	}
+}
+
+// fetchHost serves a 2025 listing with one dump that has a CHECKSUM file and
+// releases and labels files, and records each download. A file named in
+// unlisted is left out of the CHECKSUM file.
+func fetchHost(t *testing.T, unlisted ...string) (*httptest.Server, *[]string) {
+	t.Helper()
+	files := map[string]string{
+		"discogs_20250301_labels.xml.gz":   "labels",
+		"discogs_20250301_releases.xml.gz": "releases",
+	}
+	var downloads []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		switch name := path.Base(q.Get("download")); {
+		case q.Get("prefix") == "" && q.Get("download") == "":
+			fmt.Fprint(w, `<a href="?prefix=data%2F2025%2F">2025/</a>`)
+		case q.Get("prefix") != "":
+			fmt.Fprint(w, "<pre>\n"+
+				dumpRow("2025-03-01", "discogs_20250301_CHECKSUM.txt")+
+				dumpRow("2025-03-01", "discogs_20250301_labels.xml.gz")+
+				dumpRow("2025-03-01", "discogs_20250301_releases.xml.gz")+"</pre>")
+		case name == "discogs_20250301_CHECKSUM.txt":
+			for n, body := range files {
+				if slices.Contains(unlisted, n) {
+					continue
+				}
+				sum := sha256.Sum256([]byte(body))
+				fmt.Fprintf(w, "%x %s\n", sum, n)
+			}
+		default:
+			downloads = append(downloads, name)
+			fmt.Fprint(w, files[name])
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &downloads
+}
+
+func TestDumpFetch(t *testing.T) {
+	srv, downloads := fetchHost(t)
+	dir := filepath.Join(t.TempDir(), "new")
+
+	stdout, stderr, err := run(t, srv, "dump", "fetch", "202503", "--type", "releases", "--dir", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := filepath.Join(dir, "discogs_20250301_releases.xml.gz")
+	if b, err := os.ReadFile(saved); err != nil || string(b) != "releases" {
+		t.Errorf("saved file = %q, %v", b, err)
+	}
+	if want := "TYPE      STATUS      PATH\nreleases  downloaded  " + saved + "\n"; stdout != want {
+		t.Errorf("stdout\n%q\nwant\n%q", stdout, want)
+	}
+	if !strings.Contains(stderr, "SHA-256 verified") {
+		t.Errorf("stderr = %q, want the verification reported", stderr)
+	}
+
+	stdout, _, err = run(t, srv, "dump", "fetch", "--latest", "--dir", dir, "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fetched []struct {
+		Type    string `json:"type"`
+		Path    string `json:"path"`
+		Skipped bool   `json:"skipped"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &fetched); err != nil {
+		t.Fatalf("stdout is not a JSON array: %v\n%s", err, stdout)
+	}
+	if len(fetched) != 2 || fetched[0].Type != "labels" || fetched[0].Skipped || fetched[1].Type != "releases" || !fetched[1].Skipped {
+		t.Errorf("--latest fetched %+v, want labels downloaded and releases already present", fetched)
+	}
+	if got := strings.Join(*downloads, " "); got != "discogs_20250301_releases.xml.gz discogs_20250301_labels.xml.gz" {
+		t.Errorf("downloads = %q, want releases once, then labels", got)
+	}
+}
+
+func TestDumpFetchErrors(t *testing.T) {
+	srv, downloads := fetchHost(t)
+	dir := t.TempDir()
+
+	for _, args := range [][]string{
+		{"dump", "fetch"},
+		{"dump", "fetch", "20250301", "--latest"},
+		{"dump", "fetch", "20250301", "--type", "release"},
+	} {
+		if _, _, err := run(t, srv, append(args, "--dir", dir)...); err == nil {
+			t.Errorf("%q succeeded, want error", args)
+		}
+	}
+	if _, _, err := run(t, srv, "dump", "fetch", "20250301", "--type", "masters", "--dir", dir); err == nil || !strings.Contains(err.Error(), "no masters file") {
+		t.Errorf("--type masters error = %v, want one naming the missing type", err)
+	}
+	_, _, err := run(t, srv, "dump", "fetch", "20250401", "--dir", dir)
+	if code := cli.ExitCode(err); code != cli.ExitNotFound {
+		t.Errorf("unknown ID gave %v, exit %d; want exit %d", err, code, cli.ExitNotFound)
+	}
+	if len(*downloads) != 0 {
+		t.Errorf("downloads = %q, want none", *downloads)
+	}
+}
+
+func TestDumpFetchRefusesUnlistedFiles(t *testing.T) {
+	srv, downloads := fetchHost(t, "discogs_20250301_labels.xml.gz")
+	_, _, err := run(t, srv, "dump", "fetch", "20250301", "--dir", t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "not in the dump's CHECKSUM file") {
+		t.Errorf("error = %v, want the unlisted file refused", err)
+	}
+	if len(*downloads) != 0 {
+		t.Errorf("downloads = %q, want none before every file is known to be verifiable", *downloads)
 	}
 }

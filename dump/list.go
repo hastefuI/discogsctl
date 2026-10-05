@@ -164,7 +164,7 @@ func (c *Client) List(ctx context.Context, year int) ([]Dump, error) {
 			f := File{
 				Type: cmp.Or(k[3], TypeChecksum),
 				Name: k[1],
-				URL:  c.download(key),
+				URL:  c.downloadURL(key),
 			}
 			if r := row.FindSubmatch(line); r != nil {
 				f.Modified, f.Size = string(r[1]), string(r[2])
@@ -187,8 +187,8 @@ func (c *Client) List(ctx context.Context, year int) ([]Dump, error) {
 	return dumps, nil
 }
 
-// download returns the URL that downloads key from the client's own host.
-func (c *Client) download(key string) string {
+// downloadURL returns the URL that downloads key from the client's own host.
+func (c *Client) downloadURL(key string) string {
 	u := *c.base
 	u.RawQuery = url.Values{"download": {key}}.Encode()
 	return u.String()

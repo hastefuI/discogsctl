@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -208,5 +209,43 @@ func TestReleaseRateAndUnrate(t *testing.T) {
 	}
 	if len(seen) != 0 {
 		t.Errorf("requests = %q, want none", seen)
+	}
+}
+
+func TestUserEdit(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth/identity" {
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, r.Method+" "+r.URL.Path+" "+string(b))
+		fmt.Fprint(w, `{"id": 7, "username": "hasteful", "location": "Anytown", "curr_abbr": "EUR"}`)
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "user", "edit", "--location", "Anytown", "--home-page", "", "--account-currency", "eur")
+	if err != nil || !strings.Contains(stdout, "Location:") {
+		t.Fatalf("edit gave %q, %v", stdout, err)
+	}
+	if len(bodies) != 1 || !strings.HasPrefix(bodies[0], "POST /users/hasteful ") {
+		t.Fatalf("requests = %q", bodies)
+	}
+	var sent map[string]string
+	json.Unmarshal([]byte(strings.SplitN(bodies[0], " ", 3)[2]), &sent)
+	if len(sent) != 3 || sent["location"] != "Anytown" || sent["home_page"] != "" || sent["curr_abbr"] != "EUR" {
+		t.Errorf("sent %v, want location, an empty home_page and EUR", sent)
+	}
+
+	bodies = nil
+	for _, args := range [][]string{{}, {"--account-currency", "XYZ"}} {
+		if _, _, err := run(t, srv, append([]string{"user", "edit"}, args...)...); err == nil {
+			t.Errorf("user edit %q succeeded, want error", args)
+		}
+	}
+	if len(bodies) != 0 {
+		t.Errorf("refused edits sent %q", bodies)
 	}
 }

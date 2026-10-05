@@ -3,6 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
 )
 
 // Identity is the user the client is authenticated as.
@@ -80,6 +85,52 @@ func (c *Client) User(ctx context.Context, username string) (*User, error) {
 	}
 	var p User
 	if err := c.get(ctx, u, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// ProfileEdit changes fields of a user's profile. A nil field is left as it
+// is, and an empty string clears it. Currency is the account's currency for
+// marketplace prices, one of Currencies. The username cannot be changed
+// through the API.
+type ProfileEdit struct {
+	Name     *string
+	HomePage *string
+	Location *string
+	Profile  *string
+	Currency *string
+}
+
+// EditProfile changes the profile of username, which must be the token
+// holder, and returns the profile as it now is. It sends only the fields e
+// sets, as a JSON body; tested live in October 2026, a field left out kept
+// its value and an empty one was cleared.
+func (c *Client) EditProfile(ctx context.Context, username string, e ProfileEdit) (*User, error) {
+	body := map[string]string{}
+	for name, value := range map[string]*string{
+		"name":      e.Name,
+		"home_page": e.HomePage,
+		"location":  e.Location,
+		"profile":   e.Profile,
+		"curr_abbr": e.Currency,
+	} {
+		if value != nil {
+			body[name] = *value
+		}
+	}
+	if len(body) == 0 {
+		return nil, errors.New("api: a profile edit must change at least one field")
+	}
+	if e.Currency != nil && !slices.Contains(Currencies, *e.Currency) {
+		return nil, fmt.Errorf("api: currency %q must be one of %s", *e.Currency, strings.Join(Currencies, ", "))
+	}
+	u, err := c.endpoint("users", username)
+	if err != nil {
+		return nil, err
+	}
+	var p User
+	if err := c.do(ctx, http.MethodPost, u, body, &p); err != nil {
 		return nil, err
 	}
 	return &p, nil

@@ -148,6 +148,7 @@ Available Commands:
   export                     # Export a collection and wantlist as JSON
   whoami                     # Show the user the token belongs to
   user get <username>        # Get a user's profile
+  user edit                  # Edit your profile
   dump list                  # List the data dumps published at data.discogs.com
   dump fetch [id]            # Download a data dump and verify its checksums
   dump verify <file>...      # Check dump files against their CHECKSUM file
@@ -221,6 +222,10 @@ $ discogsctl marketplace order "$(discogsctl marketplace orders --sort-order des
 
 # Back up your wantlist using Docker
 $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output json > wantlist.json
+
+# Edit your profile; an empty value clears a field
+$ discogsctl user edit --location "Anytown, USA" --profile "Collecting [b]Detroit techno[/b]"
+$ discogsctl user edit --home-page ""
 
 # Read someone else's public collection
 $ discogsctl collection list --username <username> --all --output json

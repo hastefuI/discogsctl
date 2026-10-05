@@ -336,3 +336,34 @@ func TestTextSubmissions(t *testing.T) {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
+
+func TestTextListing(t *testing.T) {
+	body := `{"id": 3000001, "status": "For Sale", "price": {"value": 8.5, "currency": "USD"}, "allow_offers": true,
+		"condition": "Very Good (VG)", "sleeve_condition": "Very Good Plus (VG+)", "ships_from": "United States",
+		"posted": "2025-03-21T16:46:25-07:00", "seller": {"username": "seller"},
+		"uri": "https://www.discogs.com/sell/item/3000001", "comments": "some scuffs\non disc",
+		"release": {"id": 11180538, "description": "Vallanzaska - Cheope (CD, Album, RE)"}}`
+	var l api.Listing
+	if err := json.Unmarshal([]byte(body), &l); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &l); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID:         3000001\n" +
+		"Status:     For Sale\n" +
+		"Release:    Vallanzaska - Cheope (CD, Album, RE) (11180538)\n" +
+		"Price:      8.50 USD\n" +
+		"Offers:     yes\n" +
+		"Media:      Very Good (VG)\n" +
+		"Sleeve:     Very Good Plus (VG+)\n" +
+		"Ships from: United States\n" +
+		"Posted:     2025-03-21\n" +
+		"Seller:     seller\n" +
+		"URL:        https://www.discogs.com/sell/item/3000001\n" +
+		"Comments:   some scuffs on disc\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

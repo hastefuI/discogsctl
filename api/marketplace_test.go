@@ -266,3 +266,37 @@ func TestPriceSuggestions(t *testing.T) {
 		t.Error("PriceSuggestions(0) succeeded, want error")
 	}
 }
+
+func TestListing(t *testing.T) {
+	var uri string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uri = r.URL.RequestURI()
+		w.Write([]byte(`{"id": 3000001, "status": "For Sale", "price": {"value": 7.565, "currency": "EUR"},
+			"allow_offers": true, "condition": "Very Good (VG)", "release": {"id": 11180538, "description": "Vallanzaska - Cheope"},
+			"shipping_price": {}}`))
+	}))
+	defer srv.Close()
+
+	c, err := New(Options{BaseURL: srv.URL, UserAgent: testAgent, Currency: "eur", HTTP: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := c.Listing(t.Context(), 3000001)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uri != "/marketplace/listings/3000001?curr_abbr=EUR" {
+		t.Errorf("request = %q, want the client's currency sent", uri)
+	}
+	if l.Price != (Price{7.565, "EUR"}) || !l.AllowOffers || l.Release.ID != 11180538 {
+		t.Errorf("listing = %+v", l)
+	}
+
+	uri = ""
+	if _, err := newTestClient(t, srv, "").Listing(t.Context(), 0); err == nil || uri != "" {
+		t.Errorf("Listing(0) = %v after request %q, want an error and none", err, uri)
+	}
+	if _, err := newTestClient(t, srv, "").Listing(t.Context(), 5); err != nil || uri != "/marketplace/listings/5" {
+		t.Errorf("without a currency, request = %q, %v", uri, err)
+	}
+}

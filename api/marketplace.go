@@ -295,6 +295,26 @@ func (c *Client) OrderMessages(ctx context.Context, id string, page Page) (*Pagi
 	return getPage[OrderMessage](ctx, c, u, "messages")
 }
 
+// Listing returns the marketplace listing with id, with its price in the
+// client's currency. Unlike an inventory, this endpoint converts the price.
+func (c *Client) Listing(ctx context.Context, id int) (*Listing, error) {
+	if id < 1 {
+		return nil, fmt.Errorf("api: listing id %d must be 1 or more", id)
+	}
+	u, err := c.endpoint("marketplace", "listings", strconv.Itoa(id))
+	if err != nil {
+		return nil, err
+	}
+	if c.currency != "" {
+		u.RawQuery = url.Values{"curr_abbr": {c.currency}}.Encode()
+	}
+	var l Listing
+	if err := c.get(ctx, u, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
 // ListingStatuses are the values Discogs accepts for InventoryQuery.Status.
 // Anyone but the inventory's owner sees only "For Sale" listings, and Discogs
 // ignores the status filter for them rather than refusing it.
@@ -344,10 +364,10 @@ type ListingRelease struct {
 	ResourceURL   string `json:"resource_url"`
 }
 
-// Listing is one item in a seller's inventory. Price is in the seller's
-// currency. Location and ExternalID are sent only to the inventory's owner,
-// as are weight and quantity, which the JSON keeps but this type does not
-// name.
+// Listing is one item for sale. In an inventory, Price is in the seller's
+// currency; Client.Listing gives it in the client's. Location and ExternalID
+// are sent only to the listing's owner, as are weight and quantity, which the
+// JSON keeps but this type does not name.
 type Listing struct {
 	ID              int            `json:"id"`
 	Status          string         `json:"status"`

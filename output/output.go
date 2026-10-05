@@ -159,6 +159,26 @@ func writeText(w io.Writer, v any) error {
 		return writeTable(w, "ID\tCREATED\tSTATUS\tBUYER\tITEMS\tTOTAL", v, func(o api.Order) []string {
 			return []string{o.ID, date(o.Created), o.Status, o.Buyer.Username, itoa(len(o.Items)), price(o.Total)}
 		})
+	case *api.Listing:
+		release := v.Release.Description
+		if v.Release.ID != 0 {
+			release = strings.TrimSpace(release + " (" + itoa(v.Release.ID) + ")")
+		}
+		return writeBlock(w, []field{
+			{"ID", itoa(v.ID)},
+			{"Status", v.Status},
+			{"Release", release},
+			{"Price", price(v.Price)},
+			{"Offers", yesNo(v.AllowOffers)},
+			{"Media", v.Condition},
+			{"Sleeve", v.SleeveCondition},
+			{"Ships from", v.ShipsFrom},
+			{"Posted", date(v.Posted)},
+			{"Seller", v.Seller.Username},
+			{"Location", v.Location},
+			{"URL", v.URI},
+			{"Comments", oneLine(v.Comments)},
+		})
 	case []api.Listing:
 		return writeTable(w, "ID\tSTATUS\tCONDITION\tPRICE\tPOSTED\tRELEASE", v, func(l api.Listing) []string {
 			return []string{itoa(l.ID), l.Status, conditions(l.Condition, l.SleeveCondition), price(l.Price), date(l.Posted), l.Release.Description}

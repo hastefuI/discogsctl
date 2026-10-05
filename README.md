@@ -145,6 +145,7 @@ Available Commands:
   marketplace order <id>     # Get one of your orders with its items and tracking
   marketplace messages <id>  # List the messages and history of one of your orders
   marketplace inventory      # List a seller's listings, your own by default
+  marketplace listing <id>   # Get a marketplace listing in full
   export                     # Export a collection and wantlist as JSON
   whoami                     # Show the user the token belongs to
   user get <username>        # Get a user's profile
@@ -217,6 +218,9 @@ $ discogsctl marketplace messages <order_id> --all --output json | jq -r '.[] | 
 
 # List a seller's most expensive listings
 $ discogsctl marketplace inventory <username> --sort price --sort-order desc
+
+# Show one listing in full, priced in euros
+$ discogsctl marketplace listing <listing_id> --currency EUR
 
 # Count your own listings by status
 $ discogsctl marketplace inventory --all --output json | jq 'group_by(.status) | map({(.[0].status): length}) | add'

@@ -108,6 +108,28 @@ details.`,
 	})
 	cmd.AddCommand(messages)
 	cmd.AddCommand(newInventoryCmd(cfg))
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "listing <listing_id>",
+		Short: "Get a marketplace listing",
+		Long: `Get one marketplace listing in full: the release, price, media and sleeve
+condition, whether offers are allowed, where it ships from and the seller's
+comments. The price is in --currency. Listing IDs are in the first column of
+marketplace inventory. Your own listings also show their location.`,
+		Example: "  discogsctl marketplace listing 3000001\n  discogsctl marketplace listing 3000001 --currency GBP --output json | jq '.price'",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := parseID("listing", args[0])
+			if err != nil {
+				return err
+			}
+			l, err := cfg.client.Listing(cmd.Context(), id)
+			if err != nil {
+				return err
+			}
+			return cfg.print(cmd, l)
+		},
+	})
 	return cmd
 }
 

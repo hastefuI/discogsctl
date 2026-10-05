@@ -17,6 +17,7 @@
 // limiter starts at 25 requests a minute without a token and 60 with one, then
 // follows the X-Discogs-Ratelimit headers on each response. It keeps one
 // request in reserve rather than running the window down to zero.
+// Client.RateLimit returns those headers as Discogs last sent them.
 //
 // A response with a status of 400 or above is returned as an *Error.
 //

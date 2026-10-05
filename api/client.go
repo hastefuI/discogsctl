@@ -146,6 +146,15 @@ func New(opts Options) (*Client, error) {
 	}, nil
 }
 
+// RateLimit returns the rate limit Discogs reported on the most recent response
+// that carried the X-Discogs-Ratelimit headers. It sends no request, and is
+// the zero value until a response arrives. The client already throttles
+// itself to stay within the limit; this is for showing the budget or deciding
+// when to start a long walk.
+func (c *Client) RateLimit() RateLimit {
+	return c.limit.report()
+}
+
 // Authenticated reports whether the client sends credentials.
 func (c *Client) Authenticated() bool {
 	return c.auth.authenticated()

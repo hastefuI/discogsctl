@@ -289,8 +289,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// RateLimit is the X-Discogs-Ratelimit headers from the last response.
+	rl := client.RateLimit()
+	fmt.Println(rl.Remaining, "of", rl.Limit, "requests left this minute")
 }
 ```
+
+The client throttles itself to stay within the Discogs rate limit, so a caller
+does not need to. `RateLimit` reports the limit, used and remaining counts
+Discogs last sent, for showing the budget or deciding when to start a long walk.
 
 A response with a status of 400 or above comes back as an `*api.Error` with the
 status code and the Discogs message. Encoding any value the client returns with

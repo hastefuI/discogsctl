@@ -18,6 +18,24 @@ const (
 	authenticatedBudget = 60
 )
 
+// RateLimit is the Discogs rate limit as the client last saw it, from the
+// X-Discogs-Ratelimit headers of the most recent response that had them. It
+// is what Discogs reported, not the limiter's own estimate between responses,
+// and it counts requests from every process using the same credentials.
+// Before any response it is the zero value, with Observed zero. Tested in
+// October 2026, the first response of a minute reported Used 0, so Discogs'
+// count can trail by one request.
+type RateLimit struct {
+	// Limit is the number of requests allowed in the moving minute.
+	Limit int
+	// Used is the number made in the moving minute.
+	Used int
+	// Remaining is the number left in the moving minute.
+	Remaining int
+	// Observed is when the headers were read.
+	Observed time.Time
+}
+
 // limiter throttles requests to the Discogs window locally, so the client
 // does not run into 429s. It starts from the documented budget for the
 // credentials in use and switches to the X-Discogs-Ratelimit headers once a
@@ -37,7 +55,9 @@ type limiter struct {
 	blockedUntil time.Time
 	// sent holds the send times within the last window, oldest first.
 	sent []time.Time
-	log  *slog.Logger
+	// reported is the headers as Discogs last sent them, for RateLimit.
+	reported RateLimit
+	log      *slog.Logger
 }
 
 func newLimiter(authenticated bool, log *slog.Logger) *limiter {
@@ -119,13 +139,29 @@ func (l *limiter) expire(now time.Time) {
 func (l *limiter) observe(h http.Header, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	seen := false
 	if v, err := strconv.Atoi(h.Get("X-Discogs-Ratelimit")); err == nil && v > 0 {
 		l.limit = v
+		l.reported.Limit, seen = v, true
+	}
+	if v, err := strconv.Atoi(h.Get("X-Discogs-Ratelimit-Used")); err == nil && v >= 0 {
+		l.reported.Used, seen = v, true
 	}
 	if v, err := strconv.Atoi(h.Get("X-Discogs-Ratelimit-Remaining")); err == nil && v >= 0 {
 		l.remaining = min(v, l.limit)
 		l.observed = now
+		l.reported.Remaining, seen = v, true
 	}
+	if seen {
+		l.reported.Observed = now
+	}
+}
+
+// report returns the headers as Discogs last sent them.
+func (l *limiter) report() RateLimit {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.reported
 }
 
 // backoff holds every request for a full window after a 429.

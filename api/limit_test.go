@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
@@ -210,3 +211,71 @@ func TestLimiterWaitHonoursCancellation(t *testing.T) {
 		}
 	})
 }
+
+func TestClientRateLimit(t *testing.T) {
+	var headers atomicHeaders
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range headers.get() {
+			w.Header().Set(k, v)
+		}
+		w.Write([]byte(`{"id": 1}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, "test-token")
+
+	if got := c.RateLimit(); got != (RateLimit{}) {
+		t.Errorf("RateLimit before any response = %+v, want the zero value", got)
+	}
+
+	headers.set(map[string]string{"X-Discogs-Ratelimit": "60", "X-Discogs-Ratelimit-Used": "2", "X-Discogs-Ratelimit-Remaining": "58"})
+	before := time.Now()
+	if _, err := c.Release(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	got := c.RateLimit()
+	if got.Limit != 60 || got.Used != 2 || got.Remaining != 58 || got.Observed.Before(before) {
+		t.Errorf("RateLimit = %+v, want 60, 2, 58 observed after the request", got)
+	}
+
+	headers.set(nil)
+	if _, err := c.Release(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if again := c.RateLimit(); again != got {
+		t.Errorf("RateLimit after a response without headers = %+v, want it unchanged: %+v", again, got)
+	}
+}
+
+func TestClientRateLimitConcurrent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Discogs-Ratelimit", "60")
+		w.Header().Set("X-Discogs-Ratelimit-Remaining", "50")
+		w.Write([]byte(`{"id": 1}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, "test-token")
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			if _, err := c.Release(t.Context(), 1); err != nil {
+				t.Error(err)
+			}
+		})
+		wg.Go(func() { _ = c.RateLimit() })
+	}
+	wg.Wait()
+	if got := c.RateLimit(); got.Limit != 60 || got.Remaining != 50 {
+		t.Errorf("RateLimit = %+v", got)
+	}
+}
+
+// atomicHeaders holds the headers a test server sends, changed between
+// requests.
+type atomicHeaders struct {
+	mu sync.Mutex
+	h  map[string]string
+}
+
+func (a *atomicHeaders) set(h map[string]string) { a.mu.Lock(); a.h = h; a.mu.Unlock() }
+func (a *atomicHeaders) get() map[string]string  { a.mu.Lock(); defer a.mu.Unlock(); return a.h }

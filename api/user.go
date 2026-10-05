@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -134,4 +135,35 @@ func (c *Client) EditProfile(ctx context.Context, username string, e ProfileEdit
 		return nil, err
 	}
 	return &p, nil
+}
+
+// ContributionSorts are the values Discogs accepts for ContributionQuery.Sort.
+var ContributionSorts = []string{"label", "artist", "title", "catno", "format", "rating", "year", "added"}
+
+// ContributionQuery sorts a user's contributions. Both fields are optional,
+// and Discogs lists the most recently added first without them. SortOrder is
+// "asc" or "desc".
+type ContributionQuery struct {
+	Sort      string
+	SortOrder string
+
+	Page
+}
+
+// Contributions returns one page of the releases username has contributed
+// to the database. They are public, so no token is needed.
+func (c *Client) Contributions(ctx context.Context, username string, q ContributionQuery) (*Paginated[Release], error) {
+	u, err := c.endpoint("users", username, "contributions")
+	if err != nil {
+		return nil, err
+	}
+	v := url.Values{}
+	if err := sortValues(v, "contribution", q.Sort, q.SortOrder, ContributionSorts); err != nil {
+		return nil, err
+	}
+	if err := q.Page.apply(v); err != nil {
+		return nil, err
+	}
+	u.RawQuery = v.Encode()
+	return getPage[Release](ctx, c, u, "contributions")
 }

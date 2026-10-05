@@ -126,17 +126,12 @@ func (q OrderQuery) values() (url.Values, error) {
 	if q.Status != "" && !slices.Contains(OrderStatuses, q.Status) {
 		return nil, fmt.Errorf("api: order status %q must be one of %s", q.Status, strings.Join(OrderStatuses, ", "))
 	}
-	if q.Sort != "" && !slices.Contains(OrderSorts, q.Sort) {
-		return nil, fmt.Errorf("api: order sort %q must be one of %s", q.Sort, strings.Join(OrderSorts, ", "))
-	}
-	if q.SortOrder != "" && q.SortOrder != "asc" && q.SortOrder != "desc" {
-		return nil, fmt.Errorf("api: sort order %q must be asc or desc", q.SortOrder)
-	}
 	v := url.Values{}
-	for name, value := range map[string]string{"status": q.Status, "sort": q.Sort, "sort_order": q.SortOrder} {
-		if value != "" {
-			v.Set(name, value)
-		}
+	if err := sortValues(v, "order", q.Sort, q.SortOrder, OrderSorts); err != nil {
+		return nil, err
+	}
+	if q.Status != "" {
+		v.Set("status", q.Status)
 	}
 	if !q.CreatedAfter.IsZero() {
 		v.Set("created_after", q.CreatedAfter.UTC().Format(time.RFC3339))
@@ -324,17 +319,12 @@ func (q InventoryQuery) values() (url.Values, error) {
 	if q.Status != "" && !slices.Contains(ListingStatuses, q.Status) {
 		return nil, fmt.Errorf("api: listing status %q must be one of %s", q.Status, strings.Join(ListingStatuses, ", "))
 	}
-	if q.Sort != "" && !slices.Contains(InventorySorts, q.Sort) {
-		return nil, fmt.Errorf("api: inventory sort %q must be one of %s", q.Sort, strings.Join(InventorySorts, ", "))
-	}
-	if q.SortOrder != "" && q.SortOrder != "asc" && q.SortOrder != "desc" {
-		return nil, fmt.Errorf("api: sort order %q must be asc or desc", q.SortOrder)
-	}
 	v := url.Values{}
-	for name, value := range map[string]string{"status": q.Status, "sort": q.Sort, "sort_order": q.SortOrder} {
-		if value != "" {
-			v.Set(name, value)
-		}
+	if err := sortValues(v, "inventory", q.Sort, q.SortOrder, InventorySorts); err != nil {
+		return nil, err
+	}
+	if q.Status != "" {
+		v.Set("status", q.Status)
 	}
 	if err := q.Page.apply(v); err != nil {
 		return nil, err

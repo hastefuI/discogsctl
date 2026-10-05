@@ -84,6 +84,8 @@ type Release struct {
 	NumForSale  int            `json:"num_for_sale"`
 	LowestPrice *float64       `json:"lowest_price"`
 	Notes       string         `json:"notes"`
+	DateAdded   string         `json:"date_added"`
+	DateChanged string         `json:"date_changed"`
 	URI         string         `json:"uri"`
 	ResourceURL string         `json:"resource_url"`
 

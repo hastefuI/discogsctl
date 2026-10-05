@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 )
 
 // MaxPerPage is the largest page Discogs serves.
@@ -123,6 +125,24 @@ func (p *Paginated[T]) Each(ctx context.Context, fn func(T) error) error {
 			return err
 		}
 		page = next
+	}
+	return nil
+}
+
+// sortValues checks sort against sorts and order against asc and desc, and
+// sets each that is not empty on v. what names the listing in an error.
+func sortValues(v url.Values, what, sort, order string, sorts []string) error {
+	if sort != "" && !slices.Contains(sorts, sort) {
+		return fmt.Errorf("api: %s sort %q must be one of %s", what, sort, strings.Join(sorts, ", "))
+	}
+	if order != "" && order != "asc" && order != "desc" {
+		return fmt.Errorf("api: sort order %q must be asc or desc", order)
+	}
+	if sort != "" {
+		v.Set("sort", sort)
+	}
+	if order != "" {
+		v.Set("sort_order", order)
 	}
 	return nil
 }

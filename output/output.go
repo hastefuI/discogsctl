@@ -82,6 +82,10 @@ func writeText(w io.Writer, v any) error {
 		})
 	case *api.Master:
 		return writeMaster(w, v)
+	case []api.Release:
+		return writeTable(w, "ID\tADDED\tYEAR\tARTIST\tTITLE\tFORMAT", v, func(r api.Release) []string {
+			return []string{itoa(r.ID), date(r.DateAdded), year(r.Year), artists(r.Artists), r.Title, formats(r.Formats)}
+		})
 	case []api.MasterVersion:
 		return writeTable(w, "ID\tTITLE\tLABEL\tCATNO\tCOUNTRY\tYEAR\tFORMAT", v, func(m api.MasterVersion) []string {
 			return []string{itoa(m.ID), m.Title, m.Label, m.Catno, m.Country, m.Released, strings.Join(slices.Concat(m.MajorFormats, []string{m.Format}), ", ")}

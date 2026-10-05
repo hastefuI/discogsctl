@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.hasteful.org/discogsctl/api"
+	"go.hasteful.org/discogsctl/internal/cli"
 )
 
 func newUserCmd(cfg *config) *cobra.Command {
@@ -29,8 +31,48 @@ func newUserCmd(cfg *config) *cobra.Command {
 		},
 	})
 
-	cmd.AddCommand(newUserEditCmd(cfg))
+	cmd.AddCommand(newUserEditCmd(cfg), newContributionsCmd(cfg))
 
+	return cmd
+}
+
+func newContributionsCmd(cfg *config) *cobra.Command {
+	var sort, sortOrder string
+	cmd := &cobra.Command{
+		Use:   "contributions [username]",
+		Short: "List the releases a user has contributed",
+		Long: `List the releases a user has contributed to the Discogs database, most
+recently added first unless --sort says otherwise. Without a username, they
+are the token holder's. Contributions are public, so another user's need no
+token.`,
+		Example: `  discogsctl user contributions
+  discogsctl user contributions <username> --sort year --sort-order desc
+  discogsctl user contributions --all --output json | jq -r '.[] | "\(.id) \(.title)"'`,
+		Args: cobra.MaximumNArgs(1),
+	}
+	f := cmd.Flags()
+	f.StringVar(&sort, "sort", "", "sort by: "+strings.Join(api.ContributionSorts, ", "))
+	f.StringVar(&sortOrder, "sort-order", "", "asc or desc")
+	pages := cli.BindPageFlags(f)
+
+	cmd.RunE = listRun(cfg, pages, func(ctx context.Context, args []string, page api.Page) (*api.Paginated[api.Release], error) {
+		// The flags are checked before the username is resolved, which can
+		// cost a request.
+		var q api.ContributionQuery
+		var err error
+		if q.Sort, err = oneOf("--sort", sort, api.ContributionSorts); err != nil {
+			return nil, err
+		}
+		if q.SortOrder, err = oneOf("--sort-order", sortOrder, []string{"asc", "desc"}); err != nil {
+			return nil, err
+		}
+		user, err := cfg.username(ctx, strings.Join(args, ""))
+		if err != nil {
+			return nil, err
+		}
+		q.Page = page
+		return cfg.client.Contributions(ctx, user, q)
+	})
 	return cmd
 }
 

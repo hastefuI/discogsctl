@@ -266,3 +266,21 @@ func TestTextPriceSuggestions(t *testing.T) {
 		t.Errorf("no suggestions printed %q", buf.String())
 	}
 }
+
+func TestTextReleases(t *testing.T) {
+	body := `[{"id": 24661865, "date_added": "2022-09-28T17:16:19-07:00", "year": 2022, "title": "FRONTWAVE",
+		"artists": [{"name": "Popular Front"}], "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["LP"]}]}]`
+	var releases []api.Release
+	if err := json.Unmarshal([]byte(body), &releases); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, releases); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID        ADDED       YEAR  ARTIST         TITLE      FORMAT\n" +
+		"24661865  2022-09-28  2022  Popular Front  FRONTWAVE  Vinyl, LP\n"
+	if buf.String() != want {
+		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
+	}
+}

@@ -249,3 +249,42 @@ func TestUserEdit(t *testing.T) {
 		t.Errorf("refused edits sent %q", bodies)
 	}
 }
+
+func TestUserContributions(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		if r.URL.Path == "/oauth/identity" {
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			return
+		}
+		fmt.Fprint(w, `{"pagination": {"page": 1, "pages": 1, "urls": {}}, "contributions": []}`)
+	}))
+	defer srv.Close()
+
+	if _, _, err := run(t, srv, "user", "contributions", "--sort", "YEAR", "--sort-order", "desc"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := run(t, srv, "user", "contributions", "someone"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"/oauth/identity",
+		"/users/hasteful/contributions?page=1&per_page=50&sort=year&sort_order=desc",
+		"/users/someone/contributions?page=1&per_page=50",
+	}
+	if strings.Join(seen, " ") != strings.Join(want, " ") {
+		t.Errorf("requests = %q\nwant       %q", seen, want)
+	}
+
+	seen = nil
+	for _, args := range [][]string{{"--sort", "name"}, {"--sort-order", "up"}} {
+		if _, _, err := run(t, srv, append([]string{"user", "contributions"}, args...)...); err == nil {
+			t.Errorf("%q succeeded, want error", args)
+		}
+	}
+	if len(seen) != 0 {
+		t.Errorf("bad flags sent %q", seen)
+	}
+}

@@ -14,7 +14,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
   catalogue number and more
 - **Collection**: List folders and the releases in them, and see the estimated
   value of your collection
-- **Wantlist**: List the releases in a wantlist
+- **Wantlist**: List the releases in a wantlist, and add, annotate and remove
+  releases in your own
 - **Marketplace**: See how many copies of a release are for sale and the
   lowest price, in any supported currency, and list your orders as a seller
 - **Data dumps**: List and download the monthly [data dumps](https://data.discogs.com),
@@ -129,6 +130,9 @@ Available Commands:
   collection list            # List the releases in a collection folder
   collection value           # Show the estimated value of a collection
   wantlist list              # List the releases in a wantlist
+  wantlist add <id>          # Add a release to your wantlist
+  wantlist edit <id>         # Change your notes on a release in your wantlist
+  wantlist remove <id>       # Remove a release from your wantlist
   marketplace stats <id>     # Get the copies for sale and lowest price of a release
   marketplace orders         # List your marketplace orders as a seller
   marketplace order <id>     # Get one of your orders with its items and tracking
@@ -170,6 +174,10 @@ $ discogsctl collection list --all --output json | jq -r '.[].basic_information 
 
 # Back up your wantlist
 $ discogsctl wantlist list --all --output json > wantlist.json
+
+# Add a release to your wantlist with a note, then change the note
+$ discogsctl wantlist add 8191071 --notes "first press only"
+$ discogsctl wantlist edit 8191071 --notes "any pressing"
 
 # Get the lowest price of a release in pounds
 $ discogsctl marketplace stats 249504 --currency GBP --output json | jq '.lowest_price.value'

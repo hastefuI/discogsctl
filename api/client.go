@@ -187,13 +187,28 @@ func (c *Client) follow(link string) (*url.URL, error) {
 	return u, nil
 }
 
-// get fetches u and decodes the JSON body into v. A 429 is retried once,
-// after the limiter has waited out the window, and returned if it persists.
+// get fetches u and decodes the JSON body into v.
 func (c *Client) get(ctx context.Context, u *url.URL, v any) error {
-	status, body, err := c.send(ctx, u)
+	return c.do(ctx, http.MethodGet, u, nil, v)
+}
+
+// do sends method to u, with in encoded as a JSON body unless it is nil, and
+// decodes the JSON response into out, or expects no body when out is nil, as
+// for a DELETE. A 429 is retried once, after the limiter has waited out the
+// window, and returned if it persists. Retrying a write is safe because
+// Discogs did not act on a request it rate limited.
+func (c *Client) do(ctx context.Context, method string, u *url.URL, in, out any) error {
+	var payload []byte
+	if in != nil {
+		var err error
+		if payload, err = json.Marshal(in); err != nil {
+			return fmt.Errorf("api: encoding request: %w", err)
+		}
+	}
+	status, body, err := c.send(ctx, method, u, payload)
 	if err == nil && status == http.StatusTooManyRequests {
 		c.limit.backoff(time.Now())
-		status, body, err = c.send(ctx, u)
+		status, body, err = c.send(ctx, method, u, payload)
 	}
 	if err != nil {
 		return err
@@ -201,18 +216,22 @@ func (c *Client) get(ctx context.Context, u *url.URL, v any) error {
 	if status >= http.StatusBadRequest {
 		return newError(status, body)
 	}
+	if out == nil {
+		return nil
+	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		return errEmptyBody
 	}
-	if err := json.Unmarshal(body, v); err != nil {
+	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("discogs: decoding %s: %w", u.Path, err)
 	}
 	return nil
 }
 
 // send is the transport. Every request waits on the limiter and carries the
-// User-Agent, the Accept header and the credentials.
-func (c *Client) send(ctx context.Context, u *url.URL) (int, []byte, error) {
+// User-Agent, the Accept header and the credentials. A non-nil payload is sent
+// as a JSON body.
+func (c *Client) send(ctx context.Context, method string, u *url.URL, payload []byte) (int, []byte, error) {
 	if c.userAgent == "" {
 		return 0, nil, errors.New("api: refusing to send a request without a User-Agent")
 	}
@@ -220,9 +239,16 @@ func (c *Client) send(ctx context.Context, u *url.URL) (int, []byte, error) {
 		return 0, nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	var reqBody io.Reader
+	if payload != nil {
+		reqBody = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), reqBody)
 	if err != nil {
 		return 0, nil, fmt.Errorf("api: building request: %w", err)
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("User-Agent", c.userAgent)
 	req.Header.Set("Accept", MediaType)

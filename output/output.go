@@ -115,6 +115,18 @@ func writeText(w io.Writer, v any) error {
 			{"Median", v.Median},
 			{"Maximum", v.Maximum},
 		})
+	case *api.Want:
+		b := v.BasicInformation
+		return writeBlock(w, []field{
+			{"ID", itoa(v.ID)},
+			{"Artists", artists(b.Artists)},
+			{"Title", b.Title},
+			{"Year", year(b.Year)},
+			{"Formats", formats(b.Formats)},
+			{"Rating", rating(v.Rating)},
+			{"Notes", oneLine(v.Notes)},
+			{"Added", date(v.DateAdded)},
+		})
 	case []api.Want:
 		return writeTable(w, "ID\tARTIST\tTITLE\tYEAR\tFORMAT\tRATING\tADDED", v, func(want api.Want) []string {
 			b := want.BasicInformation

@@ -121,3 +121,48 @@ func TestInvalidOutputFormat(t *testing.T) {
 		t.Error("--output yaml succeeded, want error")
 	}
 }
+
+func TestWantlistWrites(t *testing.T) {
+	t.Setenv(envToken, "test-token")
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		switch {
+		case r.URL.Path == "/oauth/identity":
+			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			fmt.Fprint(w, `{"id": 8191071, "notes": "n", "basic_information": {"title": "Flygod"}}`)
+		}
+	}))
+	defer srv.Close()
+
+	stdout, _, err := run(t, srv, "wantlist", "add", "8191071", "--notes", "n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Title:") || !strings.Contains(stdout, "Notes:") {
+		t.Errorf("stdout = %q, want the entry", stdout)
+	}
+	stdout, stderr, err := run(t, srv, "wantlist", "remove", "8191071")
+	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed release 8191071") {
+		t.Errorf("remove gave stdout %q, stderr %q, %v; want only a note on stderr", stdout, stderr, err)
+	}
+	want := "GET /oauth/identity PUT /users/hasteful/wants/8191071 POST /users/hasteful/wants/8191071 GET /oauth/identity DELETE /users/hasteful/wants/8191071"
+	if got := strings.Join(seen, " "); got != want {
+		t.Errorf("requests = %q\nwant       %q", got, want)
+	}
+
+	seen = nil
+	if _, _, err := run(t, srv, "wantlist", "edit", "8191071"); err == nil {
+		t.Error("edit without --notes succeeded, want error")
+	}
+	t.Setenv(envToken, "")
+	if _, _, err := run(t, srv, "wantlist", "add", "8191071"); err == nil || !strings.Contains(err.Error(), "needs a token") {
+		t.Errorf("add without a token gave %v, want an error saying it needs one", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("requests = %q, want none", seen)
+	}
+}

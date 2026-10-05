@@ -169,6 +169,15 @@ func (cfg *config) username(ctx context.Context, name string) (string, error) {
 	return id.Username, nil
 }
 
+// tokenHolder returns the username of the token holder, whose account a
+// write changes. Without a token it fails before any request is sent.
+func (cfg *config) tokenHolder(ctx context.Context) (string, error) {
+	if !cfg.client.Authenticated() {
+		return "", fmt.Errorf("this changes your account, so it needs a token: set %s to a personal access token from %s", envToken, tokenURL)
+	}
+	return cfg.username(ctx, "")
+}
+
 func parseID(kind, arg string) (int, error) {
 	id, err := strconv.Atoi(arg)
 	if err != nil || id < 1 {

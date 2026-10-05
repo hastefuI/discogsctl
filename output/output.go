@@ -119,6 +119,8 @@ func writeText(w io.Writer, v any) error {
 			b := want.BasicInformation
 			return []string{itoa(want.ID), artists(b.Artists), b.Title, year(b.Year), formats(b.Formats), rating(want.Rating), date(want.DateAdded)}
 		})
+	case *api.MarketplaceStats:
+		return writeMarketplaceStats(w, v)
 	case []dump.Dump:
 		return writeTable(w, "ID\tDATE\tTYPES\tCHECKSUM", v, func(d dump.Dump) []string {
 			_, ok := d.Checksum()
@@ -249,6 +251,26 @@ func private(n *int) string {
 		return "private"
 	}
 	return itoa(*n)
+}
+
+// writeMarketplaceStats leaves out the count and price Discogs sends as null.
+// No count means none for sale, unless the release is blocked from sale.
+func writeMarketplaceStats(w io.Writer, s *api.MarketplaceStats) error {
+	forSale, lowest := "", ""
+	switch {
+	case s.NumForSale != nil:
+		forSale = itoa(*s.NumForSale)
+	case !s.BlockedFromSale:
+		forSale = "0"
+	}
+	if s.LowestPrice != nil {
+		lowest = fmt.Sprintf("%.2f %s", s.LowestPrice.Value, s.LowestPrice.Currency)
+	}
+	return writeBlock(w, []field{
+		{"For sale", forSale},
+		{"Lowest", lowest},
+		{"Blocked", yesNo(s.BlockedFromSale)},
+	})
 }
 
 func writeTracklist(w io.Writer, tracks []api.Track) error {

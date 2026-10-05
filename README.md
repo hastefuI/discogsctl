@@ -15,6 +15,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 - **Collection**: List folders and the releases in them, and see the estimated
   value of your collection
 - **Wantlist**: List the releases in a wantlist
+- **Marketplace**: See how many copies of a release are for sale and the
+  lowest price, in any supported currency
 - **Data dumps**: List the monthly [data dumps](https://data.discogs.com)
 
 ## Installation
@@ -120,6 +122,7 @@ Available Commands:
   collection list         # List the releases in a collection folder
   collection value        # Show the estimated value of a collection
   wantlist list           # List the releases in a wantlist
+  marketplace stats <id>  # Get the copies for sale and lowest price of a release
   whoami                  # Show the user the token belongs to
   user get <username>     # Get a user's profile
   dump list               # List the data dumps published at data.discogs.com
@@ -155,6 +158,9 @@ $ discogsctl collection list --all --output json | jq -r '.[].basic_information 
 
 # Back up your wantlist
 $ discogsctl wantlist list --all --output json > wantlist.json
+
+# Get the lowest price of a release in pounds
+$ discogsctl marketplace stats 249504 --currency GBP --output json | jq '.lowest_price.value'
 
 # Back up your wantlist using Docker
 $ docker run --rm -e DISCOGSCTL_TOKEN discogsctl wantlist list --all --output json > wantlist.json

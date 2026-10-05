@@ -119,3 +119,30 @@ func TestTextUserRatings(t *testing.T) {
 		}
 	}
 }
+
+func TestTextMarketplaceStats(t *testing.T) {
+	for _, tt := range []struct {
+		name, body, want string
+	}{
+		{"for sale", `{"num_for_sale": 119, "lowest_price": {"value": 0.59, "currency": "EUR"}, "blocked_from_sale": false}`,
+			"For sale: 119\nLowest:   0.59 EUR\nBlocked:  no\n"},
+		{"none for sale", `{"num_for_sale": null, "lowest_price": null, "blocked_from_sale": false}`,
+			"For sale: 0\nBlocked:  no\n"},
+		{"blocked", `{"num_for_sale": null, "lowest_price": null, "blocked_from_sale": true}`,
+			"Blocked: yes\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var s api.MarketplaceStats
+			if err := json.Unmarshal([]byte(tt.body), &s); err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			if err := Write(&buf, FormatText, &s); err != nil {
+				t.Fatal(err)
+			}
+			if buf.String() != tt.want {
+				t.Errorf("text output\n%q\nwant\n%q", buf.String(), tt.want)
+			}
+		})
+	}
+}

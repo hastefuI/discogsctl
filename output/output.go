@@ -163,6 +163,8 @@ func writeText(w io.Writer, v any) error {
 		return writeMarketplaceStats(w, v)
 	case []dump.Fetched:
 		return writeFetched(w, v)
+	case []dump.Verified:
+		return writeVerified(w, v)
 	case []dump.Dump:
 		return writeTable(w, "ID\tDATE\tTYPES\tCHECKSUM", v, func(d dump.Dump) []string {
 			_, ok := d.Checksum()
@@ -410,6 +412,25 @@ func writeFetched(w io.Writer, files []dump.Fetched) error {
 			status = "already present"
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\n", f.Type, status, f.Path)
+	}
+	return tw.Flush()
+}
+
+// writeVerified prints one line per file, with the reason after a failure.
+// Nothing is truncated: the path is there to be copied and the reason to be
+// read.
+func writeVerified(w io.Writer, files []dump.Verified) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "STATUS\tPATH")
+	for _, f := range files {
+		status := "ok"
+		if !f.OK {
+			status = "FAILED"
+		}
+		fmt.Fprintf(tw, "%s\t%s\n", status, f.Path)
+		if f.Error != "" {
+			fmt.Fprintf(tw, "\t  %s\n", f.Error)
+		}
 	}
 	return tw.Flush()
 }

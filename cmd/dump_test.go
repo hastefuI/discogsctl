@@ -230,6 +230,16 @@ func TestDumpFetch(t *testing.T) {
 		t.Errorf("stderr = %q, want the verification reported", stderr)
 	}
 
+	// fetch keeps the CHECKSUM file, so verify needs no request.
+	before := len(*downloads)
+	stdout, _, err = run(t, srv, "dump", "verify", saved)
+	if err != nil || stdout != "STATUS  PATH\nok      "+saved+"\n" {
+		t.Errorf("verify after fetch = %q, %v", stdout, err)
+	}
+	if len(*downloads) != before {
+		t.Errorf("verify downloaded %q", (*downloads)[before:])
+	}
+
 	stdout, _, err = run(t, srv, "dump", "fetch", "--latest", "--dir", dir, "-o", "json")
 	if err != nil {
 		t.Fatal(err)
@@ -283,5 +293,27 @@ func TestDumpFetchRefusesUnlistedFiles(t *testing.T) {
 	}
 	if len(*downloads) != 0 {
 		t.Errorf("downloads = %q, want none before every file is known to be verifiable", *downloads)
+	}
+}
+
+func TestDumpVerifyReportsEveryFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s", r.URL)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	good, bad := filepath.Join(dir, "discogs_20250301_labels.xml.gz"), filepath.Join(dir, "discogs_20250301_releases.xml.gz")
+	os.WriteFile(good, []byte("labels"), 0o644)
+	os.WriteFile(bad, []byte("corrupt"), 0o644)
+	sum := func(s string) string { h := sha256.Sum256([]byte(s)); return fmt.Sprintf("%x", h) }
+	os.WriteFile(filepath.Join(dir, "discogs_20250301_CHECKSUM.txt"),
+		[]byte(sum("labels")+" discogs_20250301_labels.xml.gz\n"+sum("releases")+" discogs_20250301_releases.xml.gz\n"), 0o644)
+
+	stdout, _, err := run(t, srv, "dump", "verify", bad, good)
+	if err == nil || !strings.Contains(err.Error(), "1 of 2 files failed") {
+		t.Errorf("error = %v, want one naming the failure count", err)
+	}
+	if !strings.Contains(stdout, "FAILED  "+bad) || !strings.Contains(stdout, "SHA-256 does not match") || !strings.Contains(stdout, "ok      "+good) {
+		t.Errorf("stdout\n%s\nwant both files reported, the bad one with its reason", stdout)
 	}
 }

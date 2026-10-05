@@ -98,15 +98,21 @@ func (c *Client) Latest(ctx context.Context, types ...string) (Dump, error) {
 // Checksums returns the SHA-256 of each data file in d, in lowercase hex,
 // keyed by file name, read from the dump's CHECKSUM file.
 func (c *Client) Checksums(ctx context.Context, d Dump) (map[string]string, error) {
-	f, ok := d.Checksum()
-	if !ok {
-		return nil, fmt.Errorf("dump: %s has no CHECKSUM file, so its files cannot be verified", d.ID)
-	}
-	body, err := c.small(ctx, f.URL)
+	body, err := c.ChecksumFile(ctx, d)
 	if err != nil {
 		return nil, err
 	}
 	return ParseChecksums(bytes.NewReader(body))
+}
+
+// ChecksumFile returns the CHECKSUM file of d as published, for saving beside
+// the data files so Verify can check them later.
+func (c *Client) ChecksumFile(ctx context.Context, d Dump) ([]byte, error) {
+	f, ok := d.Checksum()
+	if !ok {
+		return nil, fmt.Errorf("dump: %s has no CHECKSUM file, so its files cannot be verified", d.ID)
+	}
+	return c.small(ctx, f.URL)
 }
 
 // ParseChecksums reads a CHECKSUM file, one "<sha256> <file name>" line per
@@ -141,19 +147,28 @@ func ParseChecksums(r io.Reader) (map[string]string, error) {
 // VerifyFile returns an error unless the file at path has the SHA-256 sum,
 // given in hex.
 func VerifyFile(path, sum string) error {
+	got, err := fileSHA256(path)
+	if err != nil {
+		return err
+	}
+	if got != strings.ToLower(sum) {
+		return fmt.Errorf("dump: %s has SHA-256 %s, want %s", path, got, sum)
+	}
+	return nil
+}
+
+// fileSHA256 returns the SHA-256 of the file at path in lowercase hex.
+func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("dump: %w", err)
+		return "", fmt.Errorf("dump: %w", err)
 	}
 	defer f.Close()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return fmt.Errorf("dump: reading %s: %w", path, err)
+		return "", fmt.Errorf("dump: reading %s: %w", path, err)
 	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != strings.ToLower(sum) {
-		return fmt.Errorf("dump: %s has SHA-256 %s, want %s", path, got, sum)
-	}
-	return nil
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Fetch downloads the data file f into dir under its published name. sum is

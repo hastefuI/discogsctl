@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -23,7 +25,7 @@ XML exports of the artists, labels, masters and releases in the database,
 under the CC0 licence. Reading them is not an API request, so no token is
 needed and the API rate limit does not apply.`,
 	}
-	cmd.AddCommand(newDumpListCmd(cfg), newDumpFetchCmd(cfg))
+	cmd.AddCommand(newDumpListCmd(cfg), newDumpFetchCmd(cfg), newDumpVerifyCmd(cfg))
 	return cmd
 }
 
@@ -135,7 +137,8 @@ newest dump that has a CHECKSUM file and every type asked for.
 
 Each file is written to <name>.part and renamed only when its SHA-256
 matches; otherwise it is deleted. A file already in --dir with the right
-SHA-256 is kept, so an interrupted fetch can be run again. Without --type,
+SHA-256 is kept, so an interrupted fetch can be run again. The CHECKSUM file
+is saved beside them, for dump verify. Without --type,
 every file the dump has is downloaded, about 11 GB for a recent dump.
 
 Progress goes to stderr. Stdout lists the files saved.`,
@@ -176,7 +179,11 @@ Progress goes to stderr. Stdout lists the files saved.`,
 
 			// Every file must be in the CHECKSUM file before any is
 			// downloaded, so nothing is saved that cannot be verified.
-			sums, err := client.Checksums(ctx, d)
+			checksumFile, err := client.ChecksumFile(ctx, d)
+			if err != nil {
+				return err
+			}
+			sums, err := dump.ParseChecksums(bytes.NewReader(checksumFile))
 			if err != nil {
 				return err
 			}
@@ -192,6 +199,13 @@ Progress goes to stderr. Stdout lists the files saved.`,
 			}
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
+			}
+			// The CHECKSUM file is saved beside the data files, so dump verify
+			// can check them later without a request.
+			if sumFile, ok := d.Checksum(); ok {
+				if err := writeFileAtomic(filepath.Join(dir, sumFile.Name), checksumFile); err != nil {
+					return err
+				}
 			}
 
 			stderr := cmd.ErrOrStderr()
@@ -217,6 +231,63 @@ Progress goes to stderr. Stdout lists the files saved.`,
 	bindTypeFlag(cmd, &types, "dump types to fetch, all required to exist")
 	cmd.Flags().StringVar(&dir, "dir", ".", "directory to save the files in, created if missing")
 	return cmd
+}
+
+func newDumpVerifyCmd(cfg *config) *cobra.Command {
+	var checksums string
+	cmd := &cobra.Command{
+		Use:   "verify <file>...",
+		Short: "Check dump files against their CHECKSUM file",
+		Long: `Check data dump files against the SHA-256 their dump's CHECKSUM file lists,
+without downloading anything. Each file must keep its published name, such as
+discogs_20260801_releases.xml.gz. The CHECKSUM file is the one beside it,
+such as discogs_20260801_CHECKSUM.txt, which dump fetch saves, unless
+--checksum names another.
+
+Every file is checked and reported, and the exit status is 1 if any is
+missing from its CHECKSUM file or does not match. Each file is read in full,
+so a 10 GB file takes from a few seconds to a minute, depending on the disk.`,
+		Example: `  discogsctl dump verify ./dumps/discogs_20260801_releases.xml.gz
+  discogsctl dump verify ./dumps/*.xml.gz
+  discogsctl dump verify discogs_20260201_releases.xml.gz --checksum ~/Downloads/discogs_20260201_CHECKSUM.txt`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			results := make([]dump.Verified, 0, len(args))
+			failed := 0
+			for _, path := range args {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Checking %s\n", path)
+				v, err := dump.Verify(path, checksums)
+				if err != nil {
+					failed++
+				}
+				results = append(results, v)
+			}
+			if err := cfg.print(cmd, results); err != nil {
+				return err
+			}
+			if failed > 0 {
+				return fmt.Errorf("%d of %d files failed verification", failed, len(args))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&checksums, "checksum", "", "CHECKSUM file to check against (default the one beside each file)")
+	return cmd
+}
+
+// writeFileAtomic writes data to a temporary file beside path and renames it
+// into place, so path is never left half written.
+func writeFileAtomic(path string, data []byte) error {
+	tmp := path + ".part"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // bindTypeFlag adds --type, shared by dump list and dump fetch.

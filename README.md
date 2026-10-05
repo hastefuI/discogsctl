@@ -150,6 +150,7 @@ Available Commands:
   user get <username>        # Get a user's profile
   dump list                  # List the data dumps published at data.discogs.com
   dump fetch [id]            # Download a data dump and verify its checksums
+  dump verify <file>...      # Check dump files against their CHECKSUM file
   version                    # Print the version and User-Agent
 
 Use "discogsctl [command] --help" for more information about a command.
@@ -229,6 +230,9 @@ $ discogsctl dump list
 
 # Download the newest releases dump into ./dumps, verified against its checksum
 $ discogsctl dump fetch --latest --type releases --dir ./dumps
+
+# Check downloaded dump files again later, without a request
+$ discogsctl dump verify ./dumps/*.xml.gz
 
 # Download a dump by the start of its ID; after a failure, run it again to fetch only what is missing
 $ discogsctl dump fetch 202609 --type labels,masters

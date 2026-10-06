@@ -39,6 +39,14 @@ func IsValidFormat(format string) bool {
 	return slices.Contains(ValidFormats(), format)
 }
 
+// Whoami is the logged-in user as auth whoami shows it: the identity Discogs
+// reports for the credentials and that user's profile. JSON keeps both bodies
+// as Discogs sent them, under identity and user.
+type Whoami struct {
+	Identity *api.Identity `json:"identity"`
+	User     *api.User     `json:"user"`
+}
+
 // Write renders v to w in format. FormatText has a layout for each Discogs
 // type and falls back to JSON for anything else.
 func Write(w io.Writer, format string, v any) error {
@@ -122,7 +130,9 @@ func writeText(w io.Writer, v any) error {
 			{"URL", v.ResourceURL},
 		})
 	case *api.User:
-		return writeUser(w, v)
+		return writeBlock(w, userFields(v))
+	case *Whoami:
+		return writeWhoami(w, v)
 	case []api.Folder:
 		return writeTable(w, "ID\tNAME\tCOUNT", v, func(f api.Folder) []string {
 			return []string{itoa(f.ID), f.Name, itoa(f.Count)}
@@ -283,25 +293,32 @@ func writeLabel(w io.Writer, l *api.Label) error {
 	})
 }
 
-func writeUser(w io.Writer, u *api.User) error {
+// userFields is the labelled block of a profile.
+func userFields(u *api.User) []field {
 	ratedAvg := ""
 	if u.ReleasesRated > 0 {
 		ratedAvg = strconv.FormatFloat(u.RatingAvg, 'f', 2, 64)
 	}
-	return writeBlock(w, []field{
+	seller := feedback(u.SellerRating, u.SellerNumRatings)
+	if u.MarketplaceSuspended != nil && *u.MarketplaceSuspended {
+		seller = strings.TrimPrefix(seller+", marketplace suspended", ", ")
+	}
+	return []field{
 		{"ID", itoa(u.ID)},
 		{"Username", u.Username},
+		{"Staff", yesNoKnown(u.IsStaff)},
 		{"Name", u.Name},
 		{"Email", u.Email},
 		{"Location", u.Location},
 		{"Home page", u.HomePage},
 		{"Registered", date(u.Registered)},
+		{"Activated", yesNoKnown(u.Activated)},
 		{"Rank", strconv.FormatFloat(u.Rank, 'f', -1, 64)},
 		{"Rating avg", ratedAvg},
 		{"Contributed", itoa(u.ReleasesContributed)},
 		{"Rated", itoa(u.ReleasesRated)},
 		{"Buyer", feedback(u.BuyerRating, u.BuyerNumRatings)},
-		{"Seller", feedback(u.SellerRating, u.SellerNumRatings)},
+		{"Seller", seller},
 		{"Collection", private(u.NumCollection)},
 		{"Wantlist", private(u.NumWantlist)},
 		{"For sale", itoa(u.NumForSale)},
@@ -309,7 +326,30 @@ func writeUser(w io.Writer, u *api.User) error {
 		{"Currency", u.CurrAbbr},
 		{"URL", u.URI},
 		{"Profile", oneLine(u.Profile)},
-	})
+	}
+}
+
+// writeWhoami prints one block: the profile, with the application name from
+// the identity after the username. The ID, username and URL are in both
+// bodies, so they are printed once, from the profile.
+func writeWhoami(w io.Writer, v *Whoami) error {
+	fields := userFields(v.User)
+	i := slices.IndexFunc(fields, func(f field) bool { return f.label == "Username" })
+	fields = slices.Insert(fields, i+1, field{"Application", v.Identity.ConsumerName})
+	return writeBlock(w, fields)
+}
+
+// yesNoKnown is Yes or No, or empty, which leaves the line out, when Discogs
+// did not send the field.
+func yesNoKnown(b *bool) string {
+	switch {
+	case b == nil:
+		return ""
+	case *b:
+		return "Yes"
+	default:
+		return "No"
+	}
 }
 
 // feedback is a marketplace rating as a percentage and the number of ratings

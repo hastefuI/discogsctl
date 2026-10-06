@@ -31,30 +31,47 @@ func (i Identity) MarshalJSON() ([]byte, error)  { return encodeKept(i.raw, iden
 // collection or wantlist is private and the client is not its owner, because
 // Discogs leaves the count out rather than sending zero. RatingAvg is the
 // average of the ratings the user has given releases.
+//
+// Activated, MarketplaceSuspended and IsStaff are not in the Discogs docs but
+// are in live profiles. Each is nil when a response leaves it out, so a
+// missing field is not read as false. The docs list NumPending without saying
+// what it counts.
 type User struct {
-	ID                  int     `json:"id"`
-	Username            string  `json:"username"`
-	Name                string  `json:"name"`
-	Email               string  `json:"email"`
-	Location            string  `json:"location"`
-	Profile             string  `json:"profile"`
-	HomePage            string  `json:"home_page"`
-	Registered          string  `json:"registered"`
-	NumCollection       *int    `json:"num_collection"`
-	NumWantlist         *int    `json:"num_wantlist"`
-	NumForSale          int     `json:"num_for_sale"`
-	NumLists            int     `json:"num_lists"`
-	Rank                float64 `json:"rank"`
-	RatingAvg           float64 `json:"rating_avg"`
-	ReleasesContributed int     `json:"releases_contributed"`
-	ReleasesRated       int     `json:"releases_rated"`
-	BuyerRating         float64 `json:"buyer_rating"`
-	BuyerNumRatings     int     `json:"buyer_num_ratings"`
-	SellerRating        float64 `json:"seller_rating"`
-	SellerNumRatings    int     `json:"seller_num_ratings"`
-	CurrAbbr            string  `json:"curr_abbr"`
-	URI                 string  `json:"uri"`
-	ResourceURL         string  `json:"resource_url"`
+	ID                   int     `json:"id"`
+	Username             string  `json:"username"`
+	Name                 string  `json:"name"`
+	Email                string  `json:"email"`
+	Location             string  `json:"location"`
+	Profile              string  `json:"profile"`
+	HomePage             string  `json:"home_page"`
+	Registered           string  `json:"registered"`
+	NumCollection        *int    `json:"num_collection"`
+	NumWantlist          *int    `json:"num_wantlist"`
+	NumForSale           int     `json:"num_for_sale"`
+	NumLists             int     `json:"num_lists"`
+	NumPending           int     `json:"num_pending"`
+	Rank                 float64 `json:"rank"`
+	RatingAvg            float64 `json:"rating_avg"`
+	ReleasesContributed  int     `json:"releases_contributed"`
+	ReleasesRated        int     `json:"releases_rated"`
+	BuyerRating          float64 `json:"buyer_rating"`
+	BuyerRatingStars     float64 `json:"buyer_rating_stars"`
+	BuyerNumRatings      int     `json:"buyer_num_ratings"`
+	SellerRating         float64 `json:"seller_rating"`
+	SellerRatingStars    float64 `json:"seller_rating_stars"`
+	SellerNumRatings     int     `json:"seller_num_ratings"`
+	CurrAbbr             string  `json:"curr_abbr"`
+	Activated            *bool   `json:"activated"`
+	MarketplaceSuspended *bool   `json:"marketplace_suspended"`
+	IsStaff              *bool   `json:"is_staff"`
+	AvatarURL            string  `json:"avatar_url"`
+	BannerURL            string  `json:"banner_url"`
+	URI                  string  `json:"uri"`
+	ResourceURL          string  `json:"resource_url"`
+	InventoryURL         string  `json:"inventory_url"`
+	CollectionFoldersURL string  `json:"collection_folders_url"`
+	CollectionFieldsURL  string  `json:"collection_fields_url"`
+	WantlistURL          string  `json:"wantlist_url"`
 
 	raw json.RawMessage
 }

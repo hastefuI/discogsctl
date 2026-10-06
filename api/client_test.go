@@ -135,6 +135,52 @@ func TestRequestHeaders(t *testing.T) {
 	}
 }
 
+func TestConsumerKeyAndSecret(t *testing.T) {
+	consumer := OAuth{ConsumerKey: "ck", ConsumerSecret: "csecret"}
+	tests := []struct {
+		name       string
+		token      string
+		oauth      OAuth
+		wantAuth   string
+		wantUser   bool
+		wantBudget int
+	}{
+		{"consumer alone", "", consumer, "Discogs key=ck, secret=csecret", false, authenticatedBudget},
+		{"personal token wins", "pat", consumer, "Discogs token=pat", true, authenticatedBudget},
+		{"anonymous", "", OAuth{}, "", false, anonymousBudget},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got *http.Request
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Clone(r.Context())
+				w.Write([]byte(`{"id": 1}`))
+			}))
+			defer srv.Close()
+
+			c, err := New(Options{BaseURL: srv.URL, UserAgent: testAgent, HTTP: srv.Client(), Token: tt.token, OAuth: tt.oauth})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.limit.limit != tt.wantBudget {
+				t.Errorf("starting budget = %d, want %d", c.limit.limit, tt.wantBudget)
+			}
+			if c.Authenticated() != tt.wantUser {
+				t.Errorf("Authenticated = %v, want %v", c.Authenticated(), tt.wantUser)
+			}
+			if _, err := c.Release(t.Context(), 1); err != nil {
+				t.Fatal(err)
+			}
+			if auth := got.Header.Get("Authorization"); auth != tt.wantAuth {
+				t.Errorf("Authorization = %q, want %q", auth, tt.wantAuth)
+			}
+			if got.URL.RawQuery != "" {
+				t.Errorf("query = %q, want none: credentials belong in the header", got.URL.RawQuery)
+			}
+		})
+	}
+}
+
 func TestReleaseSendsCurrency(t *testing.T) {
 	var query string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

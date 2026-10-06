@@ -120,6 +120,50 @@ func TestTextUserRatings(t *testing.T) {
 	}
 }
 
+func TestUserAccountFields(t *testing.T) {
+	body := `{"id": 1001, "username": "user", "num_pending": 4, "buyer_rating": 100, "buyer_rating_stars": 5,
+		"buyer_num_ratings": 1, "seller_rating": 0, "seller_rating_stars": 0, "seller_num_ratings": 0,
+		"activated": true, "marketplace_suspended": true, "is_staff": false,
+		"avatar_url": "https://example.com/avatar.png", "banner_url": "",
+		"inventory_url": "https://api.discogs.com/users/user/inventory",
+		"collection_folders_url": "https://api.discogs.com/users/user/collection/folders",
+		"collection_fields_url": "https://api.discogs.com/users/user/collection/fields",
+		"wantlist_url": "https://api.discogs.com/users/user/wants"}`
+	var u api.User
+	if err := json.Unmarshal([]byte(body), &u); err != nil {
+		t.Fatal(err)
+	}
+	if u.NumPending != 4 || u.BuyerRatingStars != 5 || u.Activated == nil || !*u.Activated ||
+		u.MarketplaceSuspended == nil || !*u.MarketplaceSuspended || u.IsStaff == nil || *u.IsStaff ||
+		u.AvatarURL == "" || u.InventoryURL == "" || u.CollectionFoldersURL == "" || u.CollectionFieldsURL == "" || u.WantlistURL == "" {
+		t.Errorf("decoded %+v, want every account field", u)
+	}
+
+	var buf bytes.Buffer
+	if err := Write(&buf, FormatText, &u); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Staff:       No\n", "Activated:   Yes\n", "Seller:      marketplace suspended\n"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("text output\n%s\nwant a line %q", buf.String(), want)
+		}
+	}
+
+	var bare api.User
+	if err := json.Unmarshal([]byte(`{"id": 1001, "username": "user"}`), &bare); err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	if err := Write(&buf, FormatText, &bare); err != nil {
+		t.Fatal(err)
+	}
+	for _, absent := range []string{"Staff:", "Activated:", "suspended"} {
+		if strings.Contains(buf.String(), absent) {
+			t.Errorf("a profile without the fields printed %q:\n%s", absent, buf.String())
+		}
+	}
+}
+
 func TestTextMarketplaceStats(t *testing.T) {
 	for _, tt := range []struct {
 		name, body, want string

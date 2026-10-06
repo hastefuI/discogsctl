@@ -8,6 +8,8 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 
 ## Features
 
+- **Authentication**: Work anonymously, with a personal access token or a
+  consumer key and secret, or with OAuth 1.0a on behalf of other Discogs users
 - **Database**: Get releases, masters, artists and labels, and list their
   versions and releases
 - **Search**: Query the database by artist, title, label, year, barcode,
@@ -48,7 +50,7 @@ $ docker build -t discogsctl .
 
 Run:
 ```bash
-$ docker run --rm -e DISCOGSCTL_TOKEN discogsctl whoami
+$ docker run --rm -e DISCOGSCTL_TOKEN discogsctl auth whoami
 ```
 
 Download data dumps into a mounted directory, since the image has none it can
@@ -74,19 +76,34 @@ A Discogs account is required for anything beyond public database reads.
 
 ### Authenticating with Discogs
 
-`discogsctl` authenticates with a personal access token following the [Discogs API Authentication Guidelines](https://www.discogs.com/developers#page:authentication,header:authentication-discogs-auth-flow), which can be generated
-from the [Discogs Developer Settings](https://www.discogs.com/settings/developers)
-after login.
+`discogsctl` supports all of the [Discogs API Authentication Flows](https://www.discogs.com/developers#page:authentication,header:authentication-discogs-auth-flow).
 
-Verify that the token works by asking Discogs who it belongs to:
+| Credential | Acts as | Environment variables |
+| :- | :- | :- |
+| Consumer key and secret | No user | `DISCOGSCTL_CONSUMER_KEY`, `DISCOGSCTL_CONSUMER_SECRET` |
+| Personal access token | You | `DISCOGSCTL_TOKEN` |
+| OAuth access token | Whoever approved your app | The consumer key and secret, plus `DISCOGSCTL_OAUTH_TOKEN`, `DISCOGSCTL_OAUTH_TOKEN_SECRET` |
+
+Generate a token or register an application in the
+[Discogs Developer Settings](https://www.discogs.com/settings/developers), then
+check it with `auth verify pat` or `auth verify consumer`.
+
+For OAuth, set the consumer key and secret and run `auth exchange`.
+
+It prints a URL for the user to approve, reads the verification code,
+and prints the access token and secret once:
 
 ```bash
-$ export DISCOGSCTL_TOKEN=<replace-me>
-$ discogsctl whoami
+$ export DISCOGSCTL_CONSUMER_KEY=<replace-me> DISCOGSCTL_CONSUMER_SECRET=<replace-me>
+$ discogsctl auth exchange
+$ export DISCOGSCTL_OAUTH_TOKEN=<replace-me> DISCOGSCTL_OAUTH_TOKEN_SECRET=<replace-me>
 ```
 
-Without a token, requests are limited to 25 a minute, image URLs are left out,
-and `whoami`, private collections and collection value are unavailable.
+### Checking Authentication
+
+`auth status` shows which credentials are set and which one is in use, without
+sending a request. `auth whoami` checks them with Discogs and shows whose they
+are.
 
 ### First Request
 
@@ -147,7 +164,11 @@ Available Commands:
   marketplace inventory      # List a seller's listings, your own by default
   marketplace listing <id>   # Get a marketplace listing in full
   export                     # Export a collection and wantlist as JSON
-  whoami                     # Show the user the token belongs to
+  auth verify <type>         # Check a personal access token or a consumer key and secret (pat, consumer)
+  auth exchange              # Run the OAuth flow and print the access token once
+  auth status                # Show which authentication methods are configured and which is in use
+  auth identity              # Show the identity Discogs reports for the credentials
+  auth whoami                # Show the logged-in user's identity and profile
   user get <username>        # Get a user's profile
   user edit                  # Edit your profile
   user contributions         # List the releases a user has contributed
@@ -322,6 +343,15 @@ func main() {
 	fmt.Println(rl.Remaining, "of", rl.Limit, "requests left this minute")
 }
 ```
+
+For public reads at volume without a user, pass only `ConsumerKey` and
+`ConsumerSecret` in `api.OAuth`: requests get the same rate limit and image
+URLs as a token, and `Authenticated` reports false.
+
+To act on behalf of other users, pass `api.OAuth` credentials instead of a
+token. With only the consumer key and secret, `OAuthRequestToken` and
+`OAuthAccessToken` run the authorization flow and return the access token to
+pass back in `api.OAuth`.
 
 The client throttles itself to stay within the Discogs rate limit, so a caller
 does not need to. `RateLimit` reports the limit, used and remaining counts

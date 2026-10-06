@@ -46,8 +46,14 @@ type Options struct {
 	UserAgent string
 	// Token is a personal access token from
 	// https://www.discogs.com/settings/developers. It is optional. Without
-	// one, requests are unauthenticated: 25 a minute and no image URLs.
+	// any credentials, requests are unauthenticated: 25 a minute and no
+	// image URLs.
 	Token string
+	// OAuth is the alternative to Token. With only the consumer key and
+	// secret, requests get 60 a minute and image URLs without acting as a
+	// user. With an access token too, they act on behalf of the user who
+	// authorized it. Setting both Token and an OAuth access token is an error.
+	OAuth OAuth
 	// Currency is sent as curr_abbr on the requests that accept it, and must
 	// be one of Currencies. Empty leaves it to Discogs, which uses the
 	// authenticated user's currency.
@@ -66,23 +72,41 @@ type Client struct {
 	base      *url.URL
 	userAgent string
 	auth      auth
+	consumer  oauthAuth
 	currency  string
 	http      *http.Client
 	limit     *limiter
 	log       *slog.Logger
 }
 
-// auth sets credentials on an outgoing request. It is the one place a new
-// scheme, such as OAuth 1.0a, plugs in.
+// auth sets credentials on an outgoing request. It is the one place a
+// scheme plugs in: none, a consumer key and secret, a personal access token,
+// or OAuth 1.0a.
 type auth interface {
 	authorize(req *http.Request)
-	authenticated() bool
+	// highTier reports whether Discogs counts the credentials as
+	// authenticated, which gives 60 requests a minute and image URLs.
+	highTier() bool
+	// asUser reports whether the credentials act as a Discogs user.
+	asUser() bool
 }
 
 type noAuth struct{}
 
 func (noAuth) authorize(*http.Request) {}
-func (noAuth) authenticated() bool     { return false }
+func (noAuth) highTier() bool          { return false }
+func (noAuth) asUser() bool            { return false }
+
+// consumerAuth sends an application's consumer key and secret in the
+// Authorization header. Discogs gives it the high tier, but it acts as no
+// user. Like the token, it never goes in the query string.
+type consumerAuth struct{ key, secret string }
+
+func (c consumerAuth) authorize(req *http.Request) {
+	req.Header.Set("Authorization", "Discogs key="+c.key+", secret="+c.secret)
+}
+func (consumerAuth) highTier() bool { return true }
+func (consumerAuth) asUser() bool   { return false }
 
 // tokenAuth sends a personal access token in the Authorization header. Discogs
 // also accepts the token as a query parameter, which this client never uses,
@@ -92,11 +116,12 @@ type tokenAuth string
 func (t tokenAuth) authorize(req *http.Request) {
 	req.Header.Set("Authorization", "Discogs token="+string(t))
 }
-func (tokenAuth) authenticated() bool { return true }
+func (tokenAuth) highTier() bool { return true }
+func (tokenAuth) asUser() bool   { return true }
 
 // New returns a Client, or an error if UserAgent is missing or generic, the
-// base URL is not https, the token is malformed, or Currency is not one of
-// Currencies.
+// base URL is not https, the credentials are malformed, incomplete or both a
+// token and OAuth, or Currency is not one of Currencies.
 func New(opts Options) (*Client, error) {
 	if err := useragent.Check(opts.UserAgent); err != nil {
 		return nil, fmt.Errorf("api: %w", err)
@@ -113,12 +138,9 @@ func New(opts Options) (*Client, error) {
 		base.Path = "/"
 	}
 
-	var a auth = noAuth{}
-	if opts.Token != "" {
-		if strings.ContainsFunc(opts.Token, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
-			return nil, errors.New("api: Token contains whitespace or control characters")
-		}
-		a = tokenAuth(opts.Token)
+	a, consumer, err := newAuth(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	currency := strings.ToUpper(opts.Currency)
@@ -139,9 +161,10 @@ func New(opts Options) (*Client, error) {
 		base:      base,
 		userAgent: opts.UserAgent,
 		auth:      a,
+		consumer:  consumer,
 		currency:  currency,
 		http:      httpClient,
-		limit:     newLimiter(a.authenticated(), logger),
+		limit:     newLimiter(a.highTier(), logger),
 		log:       logger,
 	}, nil
 }
@@ -155,9 +178,60 @@ func (c *Client) RateLimit() RateLimit {
 	return c.limit.report()
 }
 
-// Authenticated reports whether the client sends credentials.
+// Authenticated reports whether requests act as a Discogs user, with a
+// personal access token or an OAuth access token. A consumer key and secret
+// alone send credentials but act as no user, so it reports false for them.
 func (c *Client) Authenticated() bool {
-	return c.auth.authenticated()
+	return c.auth.asUser()
+}
+
+// newAuth returns the scheme the credentials in opts select, and the OAuth
+// consumer for the authorization flow, which is zero without one. A personal
+// token or an access token wins over the consumer key and secret alone.
+// Errors name the field, never its value.
+func newAuth(opts Options) (auth, oauthAuth, error) {
+	o := opts.OAuth
+	for _, f := range []struct{ name, value string }{
+		{"Token", opts.Token},
+		{"OAuth.ConsumerKey", o.ConsumerKey},
+		{"OAuth.ConsumerSecret", o.ConsumerSecret},
+		{"OAuth.AccessToken", o.AccessToken},
+		{"OAuth.AccessSecret", o.AccessSecret},
+	} {
+		if malformed(f.value) {
+			return nil, oauthAuth{}, fmt.Errorf("api: %s contains whitespace or control characters", f.name)
+		}
+	}
+	switch {
+	case (o.ConsumerKey == "") != (o.ConsumerSecret == ""):
+		return nil, oauthAuth{}, errors.New("api: OAuth.ConsumerKey and OAuth.ConsumerSecret must be set together")
+	case (o.AccessToken == "") != (o.AccessSecret == ""):
+		return nil, oauthAuth{}, errors.New("api: OAuth.AccessToken and OAuth.AccessSecret must be set together")
+	case o.AccessToken != "" && o.ConsumerKey == "":
+		return nil, oauthAuth{}, errors.New("api: an OAuth access token needs the consumer key and secret it was issued to")
+	case opts.Token != "" && o.AccessToken != "":
+		return nil, oauthAuth{}, errors.New("api: set Token or an OAuth access token, not both")
+	}
+
+	consumer := oauthAuth{consumerKey: o.ConsumerKey, consumerSecret: o.ConsumerSecret}
+	switch {
+	case opts.Token != "":
+		return tokenAuth(opts.Token), consumer, nil
+	case o.AccessToken != "":
+		user := consumer
+		user.token, user.tokenSecret = o.AccessToken, o.AccessSecret
+		return user, consumer, nil
+	case o.ConsumerKey != "":
+		return consumerAuth{key: o.ConsumerKey, secret: o.ConsumerSecret}, consumer, nil
+	default:
+		return noAuth{}, consumer, nil
+	}
+}
+
+// malformed reports whether a credential holds whitespace or control
+// characters, which could split the Authorization header.
+func malformed(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
 }
 
 func isLoopback(host string) bool {
@@ -203,9 +277,7 @@ func (c *Client) get(ctx context.Context, u *url.URL, v any) error {
 
 // do sends method to u, with in encoded as a JSON body unless it is nil, and
 // decodes the JSON response into out, or expects no body when out is nil, as
-// for a DELETE. A 429 is retried once, after the limiter has waited out the
-// window, and returned if it persists. Retrying a write is safe because
-// Discogs did not act on a request it rate limited.
+// for a DELETE.
 func (c *Client) do(ctx context.Context, method string, u *url.URL, in, out any) error {
 	var payload []byte
 	if in != nil {
@@ -214,16 +286,9 @@ func (c *Client) do(ctx context.Context, method string, u *url.URL, in, out any)
 			return fmt.Errorf("api: encoding request: %w", err)
 		}
 	}
-	status, body, err := c.send(ctx, method, u, payload)
-	if err == nil && status == http.StatusTooManyRequests {
-		c.limit.backoff(time.Now())
-		status, body, err = c.send(ctx, method, u, payload)
-	}
+	body, err := c.call(ctx, c.auth, method, u, payload)
 	if err != nil {
 		return err
-	}
-	if status >= http.StatusBadRequest {
-		return newError(status, body)
 	}
 	if out == nil {
 		return nil
@@ -237,10 +302,29 @@ func (c *Client) do(ctx context.Context, method string, u *url.URL, in, out any)
 	return nil
 }
 
+// call sends method to u with credentials a and returns the body of a
+// successful response. A 429 is retried once, after the limiter has waited
+// out the window, and returned if it persists. Retrying a write is safe
+// because Discogs did not act on a request it rate limited.
+func (c *Client) call(ctx context.Context, a auth, method string, u *url.URL, payload []byte) ([]byte, error) {
+	status, body, err := c.send(ctx, a, method, u, payload)
+	if err == nil && status == http.StatusTooManyRequests {
+		c.limit.backoff(time.Now())
+		status, body, err = c.send(ctx, a, method, u, payload)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if status >= http.StatusBadRequest {
+		return nil, newError(status, body)
+	}
+	return body, nil
+}
+
 // send is the transport. Every request waits on the limiter and carries the
-// User-Agent, the Accept header and the credentials. A non-nil payload is sent
-// as a JSON body.
-func (c *Client) send(ctx context.Context, method string, u *url.URL, payload []byte) (int, []byte, error) {
+// User-Agent, the Accept header and the credentials a, which are the client's
+// own except during the OAuth flow. A non-nil payload is sent as a JSON body.
+func (c *Client) send(ctx context.Context, a auth, method string, u *url.URL, payload []byte) (int, []byte, error) {
 	if c.userAgent == "" {
 		return 0, nil, errors.New("api: refusing to send a request without a User-Agent")
 	}
@@ -261,7 +345,7 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, payload []
 	}
 	req.Header.Set("User-Agent", c.userAgent)
 	req.Header.Set("Accept", MediaType)
-	c.auth.authorize(req)
+	a.authorize(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {

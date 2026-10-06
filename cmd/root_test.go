@@ -102,6 +102,26 @@ func TestTokenNeverReachesOutput(t *testing.T) {
 	}
 }
 
+// TestNoTokenFlag guards the decision to read credentials from the environment
+// only: a flag shows up in ps and shell history.
+func TestNoTokenFlag(t *testing.T) {
+	const token = "very-secret-flag-value"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s", r.URL)
+	}))
+	defer srv.Close()
+
+	stdout, stderr, err := run(t, srv, "--token", token, "release", "get", "1")
+	if err == nil || !strings.Contains(err.Error(), "unknown flag: --token") {
+		t.Fatalf("error = %v, want unknown flag", err)
+	}
+	for _, s := range []string{stdout, stderr, err.Error()} {
+		if strings.Contains(s, token) {
+			t.Errorf("output contains the value: %q", s)
+		}
+	}
+}
+
 func TestUsernameRequiredWithoutToken(t *testing.T) {
 	t.Setenv(envToken, "")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

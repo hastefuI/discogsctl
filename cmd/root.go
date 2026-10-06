@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,7 +24,17 @@ const (
 	envToken   = "DISCOGSCTL_TOKEN"
 	projectURL = "https://hasteful.dev/discogsctl"
 	tokenURL   = "https://www.discogs.com/settings/developers"
+
+	// Credentials have no flags, since a flag shows up in ps and shell
+	// history. They are read from the environment only.
+	envConsumerKey      = "DISCOGSCTL_CONSUMER_KEY"
+	envConsumerSecret   = "DISCOGSCTL_CONSUMER_SECRET"
+	envOAuthToken       = "DISCOGSCTL_OAUTH_TOKEN"
+	envOAuthTokenSecret = "DISCOGSCTL_OAUTH_TOKEN_SECRET"
 )
+
+// credentialsHint says how to authenticate, by either method.
+var credentialsHint = fmt.Sprintf("set %s to a personal access token from %s, or use OAuth (see discogsctl auth exchange --help)", envToken, tokenURL)
 
 // VersionInfo is stamped into the binary at link time.
 type VersionInfo struct {
@@ -43,7 +52,7 @@ func userAgent(version string) string {
 }
 
 type config struct {
-	token    string
+	oauth    api.OAuth
 	output   string
 	currency string
 	verbose  bool
@@ -70,7 +79,7 @@ func Execute(vi VersionInfo) int {
 	cli.PrintError(os.Stderr, cfg.output, err)
 	code := cli.ExitCode(err)
 	if code == cli.ExitUnauthorized && cfg.output != output.FormatJSON && (cfg.client == nil || !cfg.client.Authenticated()) {
-		fmt.Fprintf(os.Stderr, "Set %s to a personal access token from %s\n", envToken, tokenURL)
+		fmt.Fprintf(os.Stderr, "To authenticate, %s\n", credentialsHint)
 	}
 	return code
 }
@@ -83,10 +92,28 @@ func newRootCmd(vi VersionInfo) (*cobra.Command, *config) {
 		Short: "A command line client for the Discogs API",
 		Long: `discogsctl reads the Discogs database, collections and wantlists.
 
-Authenticate with a personal access token from ` + tokenURL + `
-in the ` + envToken + ` environment variable. It is sent in the Authorization
-header, never in a URL. Without a token, requests are limited to 25 a minute,
-image URLs are left out, and whoami and private collections are unavailable.
+Authenticate in one of three ways, all sent in the Authorization header,
+never in a URL:
+
+  Personal access token: generate one at ` + tokenURL + `
+  and set ` + envToken + `. It acts as your own account.
+
+  Consumer key and secret: register an application at the same page and set
+  ` + envConsumerKey + ` and ` + envConsumerSecret + `. Requests get
+  60 a minute and image URLs without acting as any user, for public reads at
+  volume.
+
+  OAuth 1.0a: with the consumer key and secret set, run discogsctl auth
+  exchange to get an access token for the user who approves it. Then also set
+  ` + envOAuthToken + ` and ` + envOAuthTokenSecret + `.
+
+discogsctl auth verify checks a token or a key and secret with Discogs before
+you set them, and auth status shows which are set. Nothing is stored.
+
+A personal token and an OAuth access token cannot both be set, and either one
+is used over a consumer key and secret alone. Without any credentials,
+requests are limited to 25 a minute, image URLs are left out, and auth whoami
+and private collections are unavailable.
 
 Output is text by default. --output json prints the Discogs body itself; a
 listing prints the array of items. Errors go to stderr, and the exit status
@@ -101,7 +128,6 @@ is 3 for 401, 4 for 404, 5 for 429 and 1 for any other failure.`,
 	root.SetVersionTemplate(fmt.Sprintf("discogsctl %s\ncommit: %s\nbuilt: %s\n", vi.Version, vi.Commit, vi.Date))
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&cfg.token, "token", "", "personal access token (default $"+envToken+"; prefer the variable, since flags show up in ps and shell history)")
 	pf.StringVarP(&cfg.output, "output", "o", output.FormatText, "output format: "+strings.Join(output.ValidFormats(), " or "))
 	pf.StringVar(&cfg.currency, "currency", "USD", "currency for marketplace prices: "+strings.Join(api.Currencies, ", "))
 	pf.BoolVar(&cfg.verbose, "verbose", false, "log each request, the rate limit headers and pagination to stderr")
@@ -115,11 +141,11 @@ is 3 for 401, 4 for 404, 5 for 429 and 1 for any other failure.`,
 		newCollectionCmd(cfg),
 		newWantlistCmd(cfg),
 		newMarketplaceCmd(cfg),
-		newWhoamiCmd(cfg),
 		newUserCmd(cfg),
 		newListCmd(cfg),
 		newDumpCmd(cfg),
 		newExportCmd(cfg),
+		newAuthCmd(cfg),
 		newVersionCmd(vi),
 	)
 	return root, cfg
@@ -128,6 +154,21 @@ is 3 for 401, 4 for 404, 5 for 429 and 1 for any other failure.`,
 // connect validates the persistent flags and builds the client. It sends no
 // request.
 func (cfg *config) connect(cmd *cobra.Command) error {
+	if err := cfg.prepare(cmd); err != nil {
+		return err
+	}
+	client, err := cfg.newClient()
+	if err != nil {
+		return err
+	}
+	cfg.client = client
+	return nil
+}
+
+// prepare validates --output, sets up logging and reads the OAuth credentials
+// from the environment. It does not check the credentials, so auth status can
+// run on a configuration that newClient would refuse.
+func (cfg *config) prepare(cmd *cobra.Command) error {
 	if !output.IsValidFormat(cfg.output) {
 		return fmt.Errorf("invalid --output %q, want one of %s", cfg.output, strings.Join(output.ValidFormats(), ", "))
 	}
@@ -138,18 +179,42 @@ func (cfg *config) connect(cmd *cobra.Command) error {
 	}
 	cfg.logger = logger
 
-	client, err := api.New(api.Options{
+	cfg.oauth = api.OAuth{
+		ConsumerKey:    strings.TrimSpace(os.Getenv(envConsumerKey)),
+		ConsumerSecret: strings.TrimSpace(os.Getenv(envConsumerSecret)),
+		AccessToken:    strings.TrimSpace(os.Getenv(envOAuthToken)),
+		AccessSecret:   strings.TrimSpace(os.Getenv(envOAuthTokenSecret)),
+	}
+	return nil
+}
+
+// personalToken returns the personal access token from the environment.
+func (cfg *config) personalToken() string {
+	return strings.TrimSpace(os.Getenv(envToken))
+}
+
+// newClient checks the credentials from the environment and builds the
+// client. It sends no request.
+func (cfg *config) newClient() (*api.Client, error) {
+	token := cfg.personalToken()
+	if token != "" && cfg.oauth.AccessToken != "" {
+		return nil, fmt.Errorf("both %s and %s are set: use one or the other", envToken, envOAuthToken)
+	}
+	return cfg.clientWith(token, cfg.oauth)
+}
+
+// clientWith builds a client with the given credentials instead of the
+// configured ones, as auth verify and auth exchange do to check what the user
+// entered. It sends no request.
+func (cfg *config) clientWith(token string, oauth api.OAuth) (*api.Client, error) {
+	return api.New(api.Options{
 		BaseURL:   cfg.baseURL,
 		UserAgent: cfg.agent,
-		Token:     cmp.Or(strings.TrimSpace(cfg.token), strings.TrimSpace(os.Getenv(envToken))),
+		Token:     token,
+		OAuth:     oauth,
 		Currency:  cfg.currency,
-		Logger:    logger,
+		Logger:    cfg.logger,
 	})
-	if err != nil {
-		return err
-	}
-	cfg.client = client
-	return nil
 }
 
 func (cfg *config) print(cmd *cobra.Command, v any) error {
@@ -175,7 +240,7 @@ func (cfg *config) username(ctx context.Context, name string) (string, error) {
 // write changes. Without a token it fails before any request is sent.
 func (cfg *config) tokenHolder(ctx context.Context) (string, error) {
 	if !cfg.client.Authenticated() {
-		return "", fmt.Errorf("this changes your account, so it needs a token: set %s to a personal access token from %s", envToken, tokenURL)
+		return "", fmt.Errorf("this changes your account, so it needs a token: %s", credentialsHint)
 	}
 	return cfg.username(ctx, "")
 }

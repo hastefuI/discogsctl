@@ -316,8 +316,8 @@ func TestTextPriceSuggestions(t *testing.T) {
 }
 
 func TestTextReleases(t *testing.T) {
-	body := `[{"id": 24661865, "date_added": "2022-09-28T17:16:19-07:00", "year": 2022, "title": "FRONTWAVE",
-		"artists": [{"name": "Popular Front"}], "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["LP"]}]}]`
+	body := `[{"id": 182213, "date_added": "2009-06-23T03:02:05-07:00", "year": 1987, "title": "Never Gonna Give You Up",
+		"artists": [{"name": "Rick Astley"}], "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["7\""]}]}]`
 	var releases []api.Release
 	if err := json.Unmarshal([]byte(body), &releases); err != nil {
 		t.Fatal(err)
@@ -326,8 +326,8 @@ func TestTextReleases(t *testing.T) {
 	if err := Write(&buf, FormatText, releases); err != nil {
 		t.Fatal(err)
 	}
-	want := "ID        ADDED       YEAR  ARTIST         TITLE      FORMAT\n" +
-		"24661865  2022-09-28  2022  Popular Front  FRONTWAVE  Vinyl, LP\n"
+	want := "ID      ADDED       YEAR  ARTIST       TITLE                    FORMAT\n" +
+		"182213  2009-06-23  1987  Rick Astley  Never Gonna Give You Up  Vinyl, 7\"\n"
 	if buf.String() != want {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}
@@ -365,9 +365,9 @@ func TestTextList(t *testing.T) {
 }
 
 func TestTextSubmissions(t *testing.T) {
-	body := `{"artists": [{"id": 9, "name": "Westside Gunn", "data_quality": "Correct"}],
-		"labels": [{"id": 2939267, "name": "Popular Front", "data_quality": "Needs Vote"}],
-		"releases": [{"id": 24661865, "title": " FRONTWAVE ", "artists": [{"name": "Popular Front"}], "data_quality": "Needs Vote"}]}`
+	body := `{"artists": [{"id": 72872, "name": "Rick Astley", "data_quality": "Correct"}],
+		"labels": [{"id": 895, "name": "RCA", "data_quality": "Needs Vote"}],
+		"releases": [{"id": 182213, "title": " Never Gonna Give You Up ", "artists": [{"name": "Rick Astley"}], "data_quality": "Needs Vote"}]}`
 	var s api.Submissions
 	if err := json.Unmarshal([]byte(body), &s); err != nil {
 		t.Fatal(err)
@@ -376,10 +376,10 @@ func TestTextSubmissions(t *testing.T) {
 	if err := Write(&buf, FormatText, &s); err != nil {
 		t.Fatal(err)
 	}
-	want := "TYPE     ID        NAME                       QUALITY\n" +
-		"artist   9         Westside Gunn              Correct\n" +
-		"label    2939267   Popular Front              Needs Vote\n" +
-		"release  24661865  Popular Front - FRONTWAVE  Needs Vote\n"
+	want := "TYPE     ID      NAME                                   QUALITY\n" +
+		"artist   72872   Rick Astley                            Correct\n" +
+		"label    895     RCA                                    Needs Vote\n" +
+		"release  182213  Rick Astley - Never Gonna Give You Up  Needs Vote\n"
 	if buf.String() != want {
 		t.Errorf("text output\n%q\nwant\n%q", buf.String(), want)
 	}

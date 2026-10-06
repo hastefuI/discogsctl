@@ -19,7 +19,7 @@ func collectionHost(t *testing.T, copies ...string) (*httptest.Server, *[]string
 		seen = append(seen, r.Method+" "+r.URL.Path)
 		switch {
 		case r.URL.Path == "/oauth/identity":
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 		case r.Method == http.MethodGet:
 			items := make([]string, len(copies))
 			for i, c := range copies {
@@ -46,7 +46,7 @@ func TestCollectionAdd(t *testing.T) {
 	if err != nil || !strings.Contains(stdout, "Instance: 99") {
 		t.Fatalf("add gave %q, %v", stdout, err)
 	}
-	if got := strings.Join(*seen, " "); got != "GET /oauth/identity POST /users/hasteful/collection/folders/1/releases/5077187" {
+	if got := strings.Join(*seen, " "); got != "GET /oauth/identity POST /users/user/collection/folders/1/releases/5077187" {
 		t.Errorf("requests = %q, want the add to Uncategorized", got)
 	}
 
@@ -71,8 +71,8 @@ func TestCollectionRemove(t *testing.T) {
 		wantErr  string
 		wantExit int
 	}{
-		{name: "one copy", copies: []string{"11:3"}, deleted: "/users/hasteful/collection/folders/3/releases/5077187/instances/11"},
-		{name: "chosen copy", copies: []string{"11:1", "22:3"}, args: []string{"--instance", "22"}, deleted: "/users/hasteful/collection/folders/3/releases/5077187/instances/22"},
+		{name: "one copy", copies: []string{"11:3"}, deleted: "/users/user/collection/folders/3/releases/5077187/instances/11"},
+		{name: "chosen copy", copies: []string{"11:1", "22:3"}, args: []string{"--instance", "22"}, deleted: "/users/user/collection/folders/3/releases/5077187/instances/22"},
 		{name: "two copies, none chosen", copies: []string{"11:1", "22:3"}, wantErr: "instance 11 in folder 1, instance 22 in folder 3", wantExit: cli.ExitFailure},
 		{name: "not in collection", wantErr: "not in your collection", wantExit: cli.ExitNotFound},
 		{name: "unknown instance", copies: []string{"11:1"}, args: []string{"--instance", "5"}, wantErr: "no instance 5", wantExit: cli.ExitNotFound},

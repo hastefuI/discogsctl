@@ -18,27 +18,27 @@ func TestRateRelease(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"release_id": 8191071, "rating": 3, "username": "hasteful"}`))
+		w.Write([]byte(`{"release_id": 182213, "rating": 3, "username": "user"}`))
 	}))
 	defer srv.Close()
 	c := newTestClient(t, srv, "test-token")
 
-	r, err := c.RateRelease(t.Context(), 8191071, "hasteful", 3)
-	if err != nil || r.Rating != 3 || r.ReleaseID != 8191071 {
+	r, err := c.RateRelease(t.Context(), 182213, "user", 3)
+	if err != nil || r.Rating != 3 || r.ReleaseID != 182213 {
 		t.Fatalf("RateRelease = %+v, %v", r, err)
 	}
-	if err := c.UnrateRelease(t.Context(), 8191071, "hasteful"); err != nil {
+	if err := c.UnrateRelease(t.Context(), 182213, "user"); err != nil {
 		t.Fatal(err)
 	}
 	// The rating must be a string: Discogs answers a JSON number with 422.
-	want := `PUT /releases/8191071/rating/hasteful {"rating":"3"} | DELETE /releases/8191071/rating/hasteful`
+	want := `PUT /releases/182213/rating/user {"rating":"3"} | DELETE /releases/182213/rating/user`
 	if got := strings.Join(seen, " | "); got != want {
 		t.Errorf("requests = %q\nwant       %q", got, want)
 	}
 
 	seen = nil
 	for _, bad := range []int{0, 6, -1} {
-		if _, err := c.RateRelease(t.Context(), 8191071, "hasteful", bad); err == nil {
+		if _, err := c.RateRelease(t.Context(), 182213, "user", bad); err == nil {
 			t.Errorf("RateRelease(%d) succeeded, want error", bad)
 		}
 	}

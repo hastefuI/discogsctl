@@ -217,18 +217,18 @@ $ discogsctl wantlist list --all --output json > wantlist.json
 $ discogsctl export > discogs-backup.json
 
 # Rate a release, then remove the rating
-$ discogsctl release rate 8191071 --rating 5
-$ discogsctl release unrate 8191071
+$ discogsctl release rate 182213 --rating 5
+$ discogsctl release unrate 182213
 
 # Add a release to your wantlist with a note, then change the note
-$ discogsctl wantlist add 8191071 --notes "first press only"
-$ discogsctl wantlist edit 8191071 --notes "any pressing"
+$ discogsctl wantlist add 182213 --notes "first press only"
+$ discogsctl wantlist edit 182213 --notes "any pressing"
 
 # Get the lowest price of a release in pounds
 $ discogsctl marketplace stats 249504 --currency GBP --output json | jq '.lowest_price.value'
 
 # Get the suggested price of a release in Near Mint condition
-$ discogsctl marketplace price 8191071 --output json | jq '."Near Mint (NM or M-)".value'
+$ discogsctl marketplace price 182213 --output json | jq '."Near Mint (NM or M-)".value'
 
 # Count your orders by status
 $ discogsctl marketplace orders --all --output json | jq 'group_by(.status) | map({(.[0].status): length}) | add'

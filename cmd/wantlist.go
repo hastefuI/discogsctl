@@ -47,8 +47,8 @@ func newWantAddCmd(cfg *config) *cobra.Command {
 Discogs ignores notes sent with an add, so --notes is set by a second
 request. A rating is not set here: Discogs keeps it on the release, so use
 release rate.`,
-		Example: `  discogsctl wantlist add 8191071
-  discogsctl wantlist add 8191071 --notes "first press only"`,
+		Example: `  discogsctl wantlist add 182213
+  discogsctl wantlist add 182213 --notes "first press only"`,
 		Args: cobra.ExactArgs(1),
 	}
 	cmd.Flags().StringVar(&notes, "notes", "", "your notes on the release")
@@ -72,7 +72,7 @@ remove the release and add it again, which also resets its date added.
 
 Discogs shows a change in wantlist list after a delay, which has been 20 to
 40 seconds; the entry printed here is the new one.`,
-		Example: `  discogsctl wantlist edit 8191071 --notes "any pressing"`,
+		Example: `  discogsctl wantlist edit 182213 --notes "any pressing"`,
 		Args:    cobra.ExactArgs(1),
 	}
 	cmd.Flags().StringVar(&notes, "notes", "", "your notes on the release")
@@ -90,7 +90,7 @@ func newWantRemoveCmd(cfg *config) *cobra.Command {
 		Use:     "remove <release_id>",
 		Short:   "Remove a release from your wantlist",
 		Long:    "Remove a release from your wantlist, with its notes. A rating you gave the\nrelease stays, since Discogs keeps it on the release. This needs a token.",
-		Example: "  discogsctl wantlist remove 8191071",
+		Example: "  discogsctl wantlist remove 182213",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := parseID("release", args[0])

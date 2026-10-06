@@ -44,7 +44,7 @@ collection, needs a token for the owner.`,
 	list := &cobra.Command{
 		Use:     "list",
 		Short:   "List the releases in a collection folder",
-		Example: "  discogsctl collection list --all --output json\n  discogsctl collection list --username hasteful --folder 0 --all --output json",
+		Example: "  discogsctl collection list --all --output json\n  discogsctl collection list --username <username> --folder 0 --all --output json",
 		Args:    cobra.NoArgs,
 	}
 	var folder int

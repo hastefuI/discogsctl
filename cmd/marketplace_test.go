@@ -118,7 +118,7 @@ func TestMarketplaceInventory(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.RequestURI())
 		if r.URL.Path == "/oauth/identity" {
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 			return
 		}
 		fmt.Fprint(w, `{"pagination": {"page": 1, "pages": 1, "urls": {}}, "listings": []}`)
@@ -134,7 +134,7 @@ func TestMarketplaceInventory(t *testing.T) {
 	want := []string{
 		"/users/seller/inventory?page=1&per_page=50&sort=price&status=For+Sale",
 		"/oauth/identity",
-		"/users/hasteful/inventory?page=1&per_page=50&status=Draft",
+		"/users/user/inventory?page=1&per_page=50&status=Draft",
 	}
 	if strings.Join(seen, " ") != strings.Join(want, " ") {
 		t.Errorf("requests = %q\nwant       %q", seen, want)

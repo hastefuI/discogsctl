@@ -47,7 +47,7 @@ or price.`,
 		Long: `Get Discogs' suggested price for a release in each condition, from Mint to
 Poor. This needs a token for an account with its seller settings filled in.
 Prices are in your selling currency: Discogs ignores --currency here.`,
-		Example: "  discogsctl marketplace price 8191071\n  discogsctl marketplace price 8191071 --output json | jq '.\"Near Mint (NM or M-)\".value'",
+		Example: "  discogsctl marketplace price 182213\n  discogsctl marketplace price 182213 --output json | jq '.\"Near Mint (NM or M-)\".value'",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := parseID("release", args[0])

@@ -37,7 +37,7 @@ func newReleaseCmd(cfg *config) *cobra.Command {
 		Short: "Rate a release",
 		Long: `Give a release your rating, from 1 to 5, replacing any you gave before. Your
 wantlist shows this rating for the release. This needs a token.`,
-		Example: "  discogsctl release rate 8191071 --rating 5",
+		Example: "  discogsctl release rate 182213 --rating 5",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := parseID("release", args[0])
@@ -66,7 +66,7 @@ wantlist shows this rating for the release. This needs a token.`,
 		Use:     "unrate <id>",
 		Short:   "Remove your rating of a release",
 		Long:    "Remove the rating you gave a release. Removing one that is not there succeeds.\nThis needs a token.",
-		Example: "  discogsctl release unrate 8191071",
+		Example: "  discogsctl release unrate 182213",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := parseID("release", args[0])

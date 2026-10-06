@@ -45,9 +45,9 @@ func TestCollectionListAllResolvesTheTokenHolder(t *testing.T) {
 		seen = append(seen, r.URL.RequestURI())
 		switch {
 		case r.URL.Path == "/oauth/identity":
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 		case r.URL.Query().Get("page") == "1":
-			fmt.Fprintf(w, `{"pagination": {"page": 1, "pages": 2, "urls": {"next": "http://%s/users/hasteful/collection/folders/0/releases?page=2&per_page=100"}},
+			fmt.Fprintf(w, `{"pagination": {"page": 1, "pages": 2, "urls": {"next": "http://%s/users/user/collection/folders/0/releases?page=2&per_page=100"}},
 				"releases": [{"id": 1, "instance_id": 10}]}`, r.Host)
 		default:
 			fmt.Fprint(w, `{"pagination": {"page": 2, "pages": 2, "urls": {}}, "releases": [{"id": 2, "instance_id": 20}]}`)
@@ -71,8 +71,8 @@ func TestCollectionListAllResolvesTheTokenHolder(t *testing.T) {
 	}
 	want := []string{
 		"/oauth/identity",
-		"/users/hasteful/collection/folders/0/releases?page=1&per_page=100",
-		"/users/hasteful/collection/folders/0/releases?page=2&per_page=100",
+		"/users/user/collection/folders/0/releases?page=1&per_page=100",
+		"/users/user/collection/folders/0/releases?page=2&per_page=100",
 	}
 	if strings.Join(seen, " ") != strings.Join(want, " ") {
 		t.Errorf("requests = %q, want %q", seen, want)
@@ -150,37 +150,37 @@ func TestWantlistWrites(t *testing.T) {
 		seen = append(seen, r.Method+" "+r.URL.Path)
 		switch {
 		case r.URL.Path == "/oauth/identity":
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:
-			fmt.Fprint(w, `{"id": 8191071, "notes": "n", "basic_information": {"title": "Flygod"}}`)
+			fmt.Fprint(w, `{"id": 182213, "notes": "n", "basic_information": {"title": "Never Gonna Give You Up"}}`)
 		}
 	}))
 	defer srv.Close()
 
-	stdout, _, err := run(t, srv, "wantlist", "add", "8191071", "--notes", "n")
+	stdout, _, err := run(t, srv, "wantlist", "add", "182213", "--notes", "n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(stdout, "Title:") || !strings.Contains(stdout, "Notes:") {
 		t.Errorf("stdout = %q, want the entry", stdout)
 	}
-	stdout, stderr, err := run(t, srv, "wantlist", "remove", "8191071")
-	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed release 8191071") {
+	stdout, stderr, err := run(t, srv, "wantlist", "remove", "182213")
+	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed release 182213") {
 		t.Errorf("remove gave stdout %q, stderr %q, %v; want only a note on stderr", stdout, stderr, err)
 	}
-	want := "GET /oauth/identity PUT /users/hasteful/wants/8191071 POST /users/hasteful/wants/8191071 GET /oauth/identity DELETE /users/hasteful/wants/8191071"
+	want := "GET /oauth/identity PUT /users/user/wants/182213 POST /users/user/wants/182213 GET /oauth/identity DELETE /users/user/wants/182213"
 	if got := strings.Join(seen, " "); got != want {
 		t.Errorf("requests = %q\nwant       %q", got, want)
 	}
 
 	seen = nil
-	if _, _, err := run(t, srv, "wantlist", "edit", "8191071"); err == nil {
+	if _, _, err := run(t, srv, "wantlist", "edit", "182213"); err == nil {
 		t.Error("edit without --notes succeeded, want error")
 	}
 	t.Setenv(envToken, "")
-	if _, _, err := run(t, srv, "wantlist", "add", "8191071"); err == nil || !strings.Contains(err.Error(), "needs a token") {
+	if _, _, err := run(t, srv, "wantlist", "add", "182213"); err == nil || !strings.Contains(err.Error(), "needs a token") {
 		t.Errorf("add without a token gave %v, want an error saying it needs one", err)
 	}
 	if len(seen) != 0 {
@@ -195,36 +195,36 @@ func TestReleaseRateAndUnrate(t *testing.T) {
 		seen = append(seen, r.Method+" "+r.URL.Path)
 		switch {
 		case r.URL.Path == "/oauth/identity":
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:
-			fmt.Fprint(w, `{"release_id": 8191071, "rating": 5, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"release_id": 182213, "rating": 5, "username": "user"}`)
 		}
 	}))
 	defer srv.Close()
 
-	stdout, _, err := run(t, srv, "release", "rate", "8191071", "--rating", "5")
+	stdout, _, err := run(t, srv, "release", "rate", "182213", "--rating", "5")
 	if err != nil || !strings.Contains(stdout, "Rating:   5") {
 		t.Errorf("rate gave %q, %v", stdout, err)
 	}
-	stdout, stderr, err := run(t, srv, "release", "unrate", "8191071")
-	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed the rating of release 8191071") {
+	stdout, stderr, err := run(t, srv, "release", "unrate", "182213")
+	if err != nil || stdout != "" || !strings.Contains(stderr, "Removed the rating of release 182213") {
 		t.Errorf("unrate gave stdout %q, stderr %q, %v", stdout, stderr, err)
 	}
-	want := "GET /oauth/identity PUT /releases/8191071/rating/hasteful GET /oauth/identity DELETE /releases/8191071/rating/hasteful"
+	want := "GET /oauth/identity PUT /releases/182213/rating/user GET /oauth/identity DELETE /releases/182213/rating/user"
 	if got := strings.Join(seen, " "); got != want {
 		t.Errorf("requests = %q\nwant       %q", got, want)
 	}
 
 	seen = nil
-	for _, args := range [][]string{{"release", "rate", "8191071"}, {"release", "rate", "8191071", "--rating", "6"}, {"release", "rate", "8191071", "--rating", "0"}} {
+	for _, args := range [][]string{{"release", "rate", "182213"}, {"release", "rate", "182213", "--rating", "6"}, {"release", "rate", "182213", "--rating", "0"}} {
 		if _, _, err := run(t, srv, args...); err == nil {
 			t.Errorf("%q succeeded, want error", args)
 		}
 	}
 	t.Setenv(envToken, "")
-	if _, _, err := run(t, srv, "release", "unrate", "8191071"); err == nil || !strings.Contains(err.Error(), "needs a token") {
+	if _, _, err := run(t, srv, "release", "unrate", "182213"); err == nil || !strings.Contains(err.Error(), "needs a token") {
 		t.Errorf("unrate without a token gave %v", err)
 	}
 	if len(seen) != 0 {
@@ -237,12 +237,12 @@ func TestUserEdit(t *testing.T) {
 	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth/identity" {
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 			return
 		}
 		b, _ := io.ReadAll(r.Body)
 		bodies = append(bodies, r.Method+" "+r.URL.Path+" "+string(b))
-		fmt.Fprint(w, `{"id": 7, "username": "hasteful", "location": "Anytown", "curr_abbr": "EUR"}`)
+		fmt.Fprint(w, `{"id": 7, "username": "user", "location": "Anytown", "curr_abbr": "EUR"}`)
 	}))
 	defer srv.Close()
 
@@ -250,7 +250,7 @@ func TestUserEdit(t *testing.T) {
 	if err != nil || !strings.Contains(stdout, "Location:") {
 		t.Fatalf("edit gave %q, %v", stdout, err)
 	}
-	if len(bodies) != 1 || !strings.HasPrefix(bodies[0], "POST /users/hasteful ") {
+	if len(bodies) != 1 || !strings.HasPrefix(bodies[0], "POST /users/user ") {
 		t.Fatalf("requests = %q", bodies)
 	}
 	var sent map[string]string
@@ -276,7 +276,7 @@ func TestUserContributions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.RequestURI())
 		if r.URL.Path == "/oauth/identity" {
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 			return
 		}
 		fmt.Fprint(w, `{"pagination": {"page": 1, "pages": 1, "urls": {}}, "contributions": []}`)
@@ -291,7 +291,7 @@ func TestUserContributions(t *testing.T) {
 	}
 	want := []string{
 		"/oauth/identity",
-		"/users/hasteful/contributions?page=1&per_page=50&sort=year&sort_order=desc",
+		"/users/user/contributions?page=1&per_page=50&sort=year&sort_order=desc",
 		"/users/someone/contributions?page=1&per_page=50",
 	}
 	if strings.Join(seen, " ") != strings.Join(want, " ") {
@@ -316,7 +316,7 @@ func TestUserListsAndListGet(t *testing.T) {
 		seen = append(seen, r.URL.RequestURI())
 		switch {
 		case r.URL.Path == "/oauth/identity":
-			fmt.Fprint(w, `{"id": 7, "username": "hasteful"}`)
+			fmt.Fprint(w, `{"id": 7, "username": "user"}`)
 		case strings.HasPrefix(r.URL.Path, "/lists/"):
 			fmt.Fprint(w, `{"id": 100, "name": "Example List", "items": []}`)
 		default:
@@ -329,14 +329,14 @@ func TestUserListsAndListGet(t *testing.T) {
 	if err != nil || !strings.Contains(stdout, "Another List") {
 		t.Fatalf("user lists gave %q, %v", stdout, err)
 	}
-	if _, _, err := run(t, srv, "user", "lists", "user"); err != nil {
+	if _, _, err := run(t, srv, "user", "lists", "user2"); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err = run(t, srv, "list", "get", "100")
 	if err != nil || !strings.Contains(stdout, "Example List") {
 		t.Fatalf("list get gave %q, %v", stdout, err)
 	}
-	want := []string{"/oauth/identity", "/users/hasteful/lists?page=1&per_page=50", "/users/user/lists?page=1&per_page=50", "/lists/100"}
+	want := []string{"/oauth/identity", "/users/user/lists?page=1&per_page=50", "/users/user2/lists?page=1&per_page=50", "/lists/100"}
 	if strings.Join(seen, " ") != strings.Join(want, " ") {
 		t.Errorf("requests = %q\nwant       %q", seen, want)
 	}

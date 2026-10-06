@@ -244,11 +244,11 @@ func TestPriceSuggestions(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(t, srv, "test-token")
 
-	p, err := c.PriceSuggestions(t.Context(), 8191071)
+	p, err := c.PriceSuggestions(t.Context(), 182213)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if uri != "/marketplace/price_suggestions/8191071" {
+	if uri != "/marketplace/price_suggestions/182213" {
 		t.Errorf("request = %q", uri)
 	}
 	if len(p.Prices) != 2 || p.Prices["Mint (M)"] != (Price{546.25, "USD"}) {

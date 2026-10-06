@@ -2,6 +2,8 @@
 
 A CLI for [Discogs](https://www.discogs.com) written in Go.
 
+<img src="./demo.gif" alt="Searching for Rick Astley's Never Gonna Give You Up, listing the releases under the top result, and the marketplace stats of the first release" style="width:100%; max-width:900px;" />
+
 ## Overview
 
 [Discogs](https://www.discogs.com) is a music discovery and record collecting platform.

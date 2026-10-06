@@ -1,0 +1,101 @@
+version: 2
+
+project_name: discogsctl
+
+builds:
+  - id: discogsctl
+    binary: discogsctl
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    ids:
+      - discogsctl
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- if eq .Os "darwin" }}macos
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs(\\(.+\\))?:"
+      - "^test(\\(.+\\))?:"
+      - "^ci(\\(.+\\))?:"
+      - "^chore(\\(.+\\))?:"
+      - "README"
+      - "Merge pull request"
+      - "Merge branch"
+
+# The image copies in the binary built above, through the Dockerfile's release
+# stage, so it ships the same binary as the archives. The Dockerfile's last
+# stage still builds from source for a plain `docker build .`.
+dockers_v2:
+  - id: discogsctl
+    ids:
+      - discogsctl
+    dockerfile: Dockerfile
+    images:
+      - "ghcr.io/{{ .Env.GORELEASER_REPO_OWNER }}/{{ .ProjectName }}"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    flags:
+      - --target=release
+    # GHCR shows the description of a multi-platform image from the index.
+    # A snapshot loads one image per platform, which takes no index
+    # annotation, so the value is empty there and GoReleaser leaves it out.
+    annotations:
+      "index:org.opencontainers.image.description": "{{ if not .IsSnapshot }}A CLI for Discogs, written in Go.{{ end }}"
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "A CLI for Discogs, written in Go."
+      org.opencontainers.image.url: "https://github.com/{{ .Env.GORELEASER_REPO_OWNER }}/{{ .ProjectName }}"
+      org.opencontainers.image.source: "https://github.com/{{ .Env.GORELEASER_REPO_OWNER }}/{{ .ProjectName }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: "MIT"
+
+release:
+  draft: false
+  prerelease: auto
+  mode: append

@@ -29,6 +29,12 @@ A CLI for [Discogs](https://www.discogs.com) written in Go.
 
 ## Installation
 
+### Pre-built Binaries
+
+Download and extract the latest release for your platform from the repository's Releases page.
+
+Release binaries are available for Linux, macOS, FreeBSD, and Windows on amd64 and arm64.
+
 ### Build From Source
 
 `discogsctl` requires Go 1.27 or newer.

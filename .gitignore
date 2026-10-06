@@ -8,3 +8,6 @@
 # Data dumps and partial downloads from dump fetch.
 *.gz
 *.part
+
+# GoReleaser output.
+/dist/

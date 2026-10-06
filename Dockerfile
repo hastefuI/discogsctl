@@ -1,5 +1,20 @@
 # syntax=docker/dockerfile:1
 
+# The release stage is what GoReleaser builds, with --target=release, from a
+# context holding the binary it already built at <os>/<arch>/discogsctl. It
+# never reaches the Go stage below. GoReleaser reads the base image from the
+# last FROM in this file, so both final stages must use the same one.
+FROM gcr.io/distroless/static:nonroot AS release
+
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/discogsctl /usr/local/bin/discogsctl
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/usr/local/bin/discogsctl"]
+
+# The stages from here build from source, for a plain `docker build .`, which
+# builds the last stage.
 FROM golang:1.27.0-alpine3.24 AS build
 
 WORKDIR /src

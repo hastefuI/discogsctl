@@ -65,3 +65,35 @@ jobs:
           code=0
           docker run --rm discogsctl release get 0 || code=$?
           test "$code" -eq 1
+
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set repository owner (lowercase)
+        id: owner
+        run: |
+          REPO_OWNER="${{ github.repository_owner }}"
+          echo "value=${REPO_OWNER,,}" >> "$GITHUB_OUTPUT"
+      # A snapshot builds the archives and the release images locally, and
+      # publishes nothing, so a broken config fails here rather than on a tag.
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "v2.18.0"
+          args: release --snapshot --clean
+        env:
+          GORELEASER_REPO_OWNER: ${{ steps.owner.outputs.value }}
+      - name: release image runs the built binary
+        run: |
+          version=$(jq -r .version dist/metadata.json)
+          image=$(jq -r --arg v "$version" '.[]
+            | select(.type == "Docker Image" and (.name | endswith(":\($v)-amd64")))
+            | .name' dist/artifacts.json)
+          docker run --rm --platform linux/amd64 "$image" version \
+            | grep -qx "discogsctl $version"
